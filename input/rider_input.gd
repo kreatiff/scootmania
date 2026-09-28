@@ -12,8 +12,8 @@ enum Mode { LIVE, ARMED_RECORD, RECORDING, ARMED_PLAYBACK, PLAYBACK }
 
 const REPLAY_DIR := "user://replays"
 const LAST_REPLAY := REPLAY_DIR + "/last.replay"
-const REPLAY_VERSION := 1
-const STRIDE := 6 # floats per tick, see RiderIntent.to_array()
+const REPLAY_VERSION := 2 # 2: added reset
+const STRIDE := 7 # floats per tick, see RiderIntent.to_array()
 
 var tuning: InputTuning = preload("res://input/input_tuning.tres")
 
@@ -127,6 +127,7 @@ func _sample_live() -> RiderIntent:
 	live.pose = tuning.shape_stick(raw_pose)
 	live.brake = tuning.shape_trigger(Input.get_action_strength("brake"))
 	live.kick = Input.is_action_pressed("kick")
+	live.reset = Input.is_action_pressed("reset")
 	return live
 
 

@@ -34,6 +34,8 @@ var lean_angle := 0.0
 var target_lean := 0.0
 ## Last balance torque applied, N·m (+ leans right). For telemetry and tests.
 var balance_torque := 0.0
+## How long the scooter has been tipped past fallen_angle_deg, s.
+var fallen_time := 0.0
 
 var front_wheel := ScooterWheel.new()
 var rear_wheel := ScooterWheel.new()
@@ -41,6 +43,9 @@ var rear_wheel := ScooterWheel.new()
 var _push_time_left := 0.0
 var _kick_was_down := false
 var _steering_visual := Node3D.new()
+var _spawn_transform := Transform3D()
+var _reset_held_time := 0.0
+var _respawned_this_hold := false
 
 
 func _ready() -> void:
@@ -61,11 +66,14 @@ func _ready() -> void:
 	physics_material_override = body_material
 	_apply_mass_properties()
 	_build()
+	_spawn_transform = global_transform
 
 
 func _physics_process(delta: float) -> void:
 	_apply_mass_properties()
 	var intent := RiderInput.intent if use_live_input else manual_intent
+	if _handle_recovery(intent, delta):
+		return # teleported this tick; forces resume next tick
 	var speed := -linear_velocity.dot(global_basis.z)
 
 	_update_lean(intent, delta)
@@ -88,6 +96,121 @@ func _physics_process(delta: float) -> void:
 
 func is_grounded() -> bool:
 	return front_wheel.in_contact or rear_wheel.in_contact
+
+
+func is_fallen() -> bool:
+	return global_basis.y.dot(Vector3.UP) < cos(deg_to_rad(tuning.fallen_angle_deg))
+
+
+## Stands the scooter up where it is: on the surface below, facing the way
+## it was heading, stopped. On a surface too steep to stand on (say, high
+## on a quarter pipe) it moves down the fall line to the first spot where
+## both wheels have level ground, the way a fallen rider slides down.
+func recover_in_place() -> void:
+	var heading := _flat(-global_basis.z)
+	if heading == Vector3.ZERO:
+		heading = _flat(linear_velocity)
+	if heading == Vector3.ZERO:
+		heading = _flat(global_basis.y) # lying on its nose or tail
+	var hit := _ground_below(global_position)
+	if hit.is_empty():
+		_place(global_position, Vector3.UP, heading)
+		return
+	var normal: Vector3 = hit["normal"]
+	if normal.y > 0.9:
+		_place(hit["position"], normal, heading)
+		return
+	var downhill := _flat(normal)
+	var probe: Vector3 = hit["position"]
+	for step in 40:
+		probe += downhill * 0.25
+		var spot := _ground_below(probe)
+		if not spot.is_empty() and _can_stand_at(spot["position"], heading):
+			_place(spot["position"], Vector3.UP, heading)
+			return
+	_place(hit["position"] + Vector3.UP * 0.5, Vector3.UP, heading)
+
+
+## Both wheels on level ground at this spot, at the same height.
+func _can_stand_at(point: Vector3, heading: Vector3) -> bool:
+	var half := heading * tuning.wheelbase * 0.5
+	var front := _ground_below(point + half)
+	var rear := _ground_below(point - half)
+	if front.is_empty() or rear.is_empty():
+		return false
+	return front["normal"].y > 0.9 and rear["normal"].y > 0.9 \
+			and absf(front["position"].y - rear["position"].y) < 0.05 \
+			and absf(front["position"].y - point.y) < 0.05
+
+
+func _ground_below(point: Vector3) -> Dictionary:
+	var query := PhysicsRayQueryParameters3D.create(
+			point + Vector3.UP * 1.5, point + Vector3.DOWN * 4.0,
+			PropMaterials.LAYER_WORLD, [get_rid()])
+	return get_world_3d().direct_space_state.intersect_ray(query)
+
+
+func respawn() -> void:
+	_place(_spawn_transform.origin, Vector3.UP, _flat(-_spawn_transform.basis.z))
+
+
+## Tap reset: stand up in place. Hold it: back to the spawn point. Fallen
+## for auto_recover_delay: stand up in place automatically.
+## Returns true if the scooter was moved this tick.
+func _handle_recovery(intent: RiderIntent, delta: float) -> bool:
+	if intent.reset:
+		var pressed_now := _reset_held_time == 0.0
+		_reset_held_time += delta
+		if pressed_now:
+			recover_in_place()
+			return true
+		if _reset_held_time >= tuning.respawn_hold_time and not _respawned_this_hold:
+			_respawned_this_hold = true
+			respawn()
+			return true
+	else:
+		_reset_held_time = 0.0
+		_respawned_this_hold = false
+
+	if is_fallen():
+		fallen_time += delta
+		var delay := tuning.auto_recover_delay
+		if delay > 0.0:
+			DebugDraw.watch("fallen", "standing up in %.1f s (or press Start / R)" % maxf(delay - fallen_time, 0.0))
+			if fallen_time >= delay:
+				recover_in_place()
+				return true
+	else:
+		fallen_time = 0.0
+		DebugDraw.watches.erase("fallen")
+	return false
+
+
+func _place(ground: Vector3, up: Vector3, heading: Vector3) -> void:
+	var forward := (heading - up * heading.dot(up)).normalized()
+	if forward == Vector3.ZERO:
+		forward = Vector3.FORWARD
+	var back := -forward
+	var xform_basis := Basis(up.cross(back), up, back)
+	# Sit at the static wheel compression so it doesn't drop or bounce.
+	var sink := tuning.total_mass() * GRAVITY * 0.5 / tuning.wheel_stiffness
+	global_transform = Transform3D(xform_basis, ground - up * sink)
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	steer_angle = 0.0
+	target_lean = 0.0
+	lean_angle = 0.0
+	fallen_time = 0.0
+	_push_time_left = 0.0
+	front_wheel.sliding = false
+	rear_wheel.sliding = false
+	DebugDraw.watches.erase("fallen")
+	reset_physics_interpolation()
+
+
+static func _flat(v: Vector3) -> Vector3:
+	var flat := Vector3(v.x, 0.0, v.z)
+	return flat.normalized() if flat.length_squared() > 1e-4 else Vector3.ZERO
 
 
 func _apply_mass_properties() -> void:

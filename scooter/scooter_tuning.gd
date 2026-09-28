@@ -78,6 +78,14 @@ extends Resource
 ## stick flick demands more sideways grip than the tyres have.
 @export_range(50.0, 2000.0, 10.0, "suffix:N·m") var max_balance_torque := 450.0
 
+@export_group("Recovery")
+## Tipped further than this counts as fallen.
+@export_range(30.0, 90.0, 1.0, "suffix:°") var fallen_angle_deg := 60.0
+## Stand back up automatically after being fallen this long. 0 = never.
+@export_range(0.0, 5.0, 0.1, "suffix:s") var auto_recover_delay := 1.5
+## Holding reset this long returns to the spawn point.
+@export_range(0.3, 2.0, 0.05, "suffix:s") var respawn_hold_time := 0.75
+
 @export_group("Debug")
 ## Length of drawn force arrows: metres per newton.
 @export_range(0.0001, 0.005, 0.0001) var force_draw_scale := 0.001

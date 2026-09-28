@@ -282,7 +282,8 @@ gain on each pump.
       Clean / sketchy / bail thresholds are tuning values, with generous
       defaults.
 - [ ] **Bail, stage 1**: when a bail is detected, slow motion for ~0.5 s,
-      a camera cut, then respawn at the last safe spot.
+      a camera cut, then respawn at the last safe spot. (Basic recovery
+      already exists: standing up after a fall, by button or automatically.)
 - [ ] Coping behaviour: the quarter pipe lip must launch you straight up
       and let you land back in, which is the classic hard case for
       shape-cast wheels.

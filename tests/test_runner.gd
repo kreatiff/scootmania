@@ -132,6 +132,7 @@ func _run_unit_tests() -> void:
 	intent.pose = Vector2(-1.0, 0.25)
 	intent.brake = 0.6
 	intent.kick = true
+	intent.reset = true
 	check(RiderIntent.from_array(intent.to_array()).equals(intent), "intent survives array round trip")
 
 	var frames := PackedFloat64Array([0.1, 0.2, 0.3, 0.4, 0.5, 1.0])

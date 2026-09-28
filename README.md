@@ -17,7 +17,8 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 | Pose (compress / extend, tricks) | Right stick | Arrow keys |
 | Rear brake | Right trigger | Shift |
 | Kick | A / Cross | Space |
-| Reset | Start | R |
+| Stand up where you are (tap) | Start | R |
+| Back to the spawn point (hold ¾ s) | Start | R |
 | Tuning panel | Back / Select | Tab |
 | Camera: chase → overview → fly | D-pad up | F2 |
 | Fly camera move / look | Left / right stick | WASD / hold right mouse |
@@ -54,6 +55,10 @@ rider (the see-through capsule). Two sphere-cast wheels apply all ground
 forces: a stiff sprung compliance, rolling resistance, a rear-only brake
 and sideways grip that slides past the surface's friction (concrete grips
 about three times harder than steel).
+
+**Falling over:** after 1.5 s tipped past 60°, the scooter stands itself
+up where it came to rest (the delay is a slider; 0 turns it off). Tap
+Start / R to stand up at once, or hold it to go back to the spawn point.
 
 **Lean steers.** The left stick sets how far you lean. The front wheel then
 steers to whatever angle balances that lean at your speed, the way a

@@ -16,9 +16,9 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("reset"):
-		get_tree().reload_current_scene()
-	elif event.is_action_pressed("debug_camera"):
+	# Reset (Start / R) is handled by the scooter through RiderInput, so
+	# replays reproduce it.
+	if event.is_action_pressed("debug_camera"):
 		_cycle_camera()
 
 

@@ -12,6 +12,9 @@ var pose := Vector2.ZERO
 var brake := 0.0
 ## Held state of the kick button. Physics detects presses by edge.
 var kick := false
+## Held state of the reset button: tap = stand up in place, hold = respawn.
+## Part of the intent so replays that include a reset still reproduce.
+var reset := false
 
 
 func duplicate_intent() -> RiderIntent:
@@ -20,11 +23,13 @@ func duplicate_intent() -> RiderIntent:
 	copy.pose = pose
 	copy.brake = brake
 	copy.kick = kick
+	copy.reset = reset
 	return copy
 
 
 func to_array() -> PackedFloat64Array:
-	return PackedFloat64Array([lean.x, lean.y, pose.x, pose.y, brake, 1.0 if kick else 0.0])
+	return PackedFloat64Array([lean.x, lean.y, pose.x, pose.y, brake,
+			1.0 if kick else 0.0, 1.0 if reset else 0.0])
 
 
 static func from_array(a: PackedFloat64Array) -> RiderIntent:
@@ -33,6 +38,7 @@ static func from_array(a: PackedFloat64Array) -> RiderIntent:
 	intent.pose = Vector2(a[2], a[3])
 	intent.brake = a[4]
 	intent.kick = a[5] > 0.5
+	intent.reset = a[6] > 0.5
 	return intent
 
 

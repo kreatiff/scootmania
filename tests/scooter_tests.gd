@@ -23,6 +23,7 @@ func run() -> void:
 	await _test_kicker()
 	await _test_steering()
 	await _test_grip_by_surface()
+	await _test_recovery()
 
 
 ## Sits still on flat ground: no jitter, no creep, loads split by the
@@ -225,6 +226,60 @@ func _test_grip_by_surface() -> void:
 	_check(results["steel"][0],
 			"grip: steel slides in the same %.2f g turn" % results["steel"][1])
 	plate.queue_free()
+
+
+## Falling over: stands itself up after the delay, where it fell. Tapping
+## reset stands it up at once, keeping its heading. Holding reset returns
+## to where it spawned.
+func _test_recovery() -> void:
+	var at := Vector3(-40, 0, 80)
+	var s := _spawn(at, 0.0)
+	# Tip it onto its side from a little height.
+	s.global_transform = Transform3D(Basis(Vector3.FORWARD, PI * 0.5), at + Vector3(0, 0.3, 0))
+	var ticks := 0
+	var rest := s.global_position
+	while s.global_basis.y.y < 0.99 and ticks < 120 * 5:
+		rest = s.global_position
+		await _ticks(1)
+		ticks += 1
+	var recovered_after := ticks / 120.0
+	_check(recovered_after >= tuning.auto_recover_delay and recovered_after < tuning.auto_recover_delay + 1.0,
+			"recovery: stands itself up after %.2f s (delay %.1f s)" % [recovered_after, tuning.auto_recover_delay])
+	var moved := Vector2(s.global_position.x - rest.x, s.global_position.z - rest.z).length()
+	_check(moved < 0.05, "recovery: stands up where it came to rest (%.3f m away)" % moved)
+	await _ticks(120)
+	_check(s.global_basis.y.y > 0.99 and s.linear_velocity.length() < 0.01,
+			"recovery: settles upright (tilt %.1f°, %.3f m/s)"
+			% [rad_to_deg(acos(clampf(s.global_basis.y.y, -1, 1))), s.linear_velocity.length()])
+	s.queue_free()
+
+	# Tap reset while riding: upright and stopped at once, same heading.
+	var start := Vector3(-40, 0, 110)
+	s = _spawn(start, 30.0, Basis(Vector3.UP, deg_to_rad(30.0)) * Vector3(0, 0, -4.0))
+	s.manual_intent.lean = Vector2(0.6, 0.0)
+	await _ticks(60)
+	var heading_before := -s.global_basis.z
+	s.manual_intent.lean = Vector2.ZERO
+	s.manual_intent.reset = true
+	await _ticks(1)
+	s.manual_intent.reset = false
+	await _ticks(1)
+	_check(s.linear_velocity.length() < 0.05 and s.global_basis.y.y > 0.999,
+			"recovery: tapping reset stands it up and stops it (%.3f m/s)" % s.linear_velocity.length())
+	_check(Vector2(heading_before.x, heading_before.z).normalized().dot(
+			Vector2(-s.global_basis.z.x, -s.global_basis.z.z)) > 0.999,
+			"recovery: tapping reset keeps the heading")
+
+	# Hold reset: back to the spawn point.
+	s.linear_velocity = Basis(Vector3.UP, deg_to_rad(30.0)) * Vector3(0, 0, -4.0)
+	await _ticks(90)
+	s.manual_intent.reset = true
+	await _ticks(int(tuning.respawn_hold_time * 120.0) + 5)
+	s.manual_intent.reset = false
+	await _ticks(2)
+	var from_spawn := Vector2(s.global_position.x - start.x, s.global_position.z - start.z).length()
+	_check(from_spawn < 0.02, "recovery: holding reset returns to the spawn point (%.3f m away)" % from_spawn)
+	s.queue_free()
 
 
 ## Ground-plane steering from the headtube steering angle: the axis is

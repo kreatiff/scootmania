@@ -10,6 +10,9 @@ extends Camera3D
 ## How quickly the camera catches up. Higher is tighter.
 @export_range(0.5, 20.0, 0.5) var follow_rate := 5.0
 
+## Further than this from the target means it teleported.
+const SNAP_DISTANCE := 12.0
+
 var _heading := Vector3.FORWARD
 
 
@@ -33,6 +36,8 @@ func _process(delta: float) -> void:
 	if wanted == Vector3.ZERO:
 		wanted = _flat(-xform.basis.z, _heading)
 	var blend := 1.0 - exp(-follow_rate * delta)
+	if global_position.distance_to(xform.origin) > SNAP_DISTANCE:
+		blend = 1.0 # the target teleported (respawn): cut, don't swoop
 	_heading = _heading.slerp(wanted, blend).normalized()
 	global_position = global_position.lerp(_desired_position(xform.origin), blend)
 	look_at(xform.origin + Vector3.UP * look_height)
