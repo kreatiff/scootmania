@@ -258,6 +258,33 @@ func _test_recovery() -> void:
 			% [rad_to_deg(acos(clampf(s.global_basis.y.y, -1, 1))), s.linear_velocity.length()])
 	s.queue_free()
 
+	# High-centred: the deck resting on a small box with both wheels in the
+	# air. Upright, so not "fallen", but not riding either. Recovery must
+	# notice, and must not stand it back up on the same box.
+	var box := StaticBody3D.new()
+	box.physics_material_override = PropMaterials.CONCRETE
+	var box_shape := CollisionShape3D.new()
+	box_shape.shape = BoxShape3D.new()
+	box_shape.shape.size = Vector3(0.6, 0.3, 0.3)
+	box.add_child(box_shape)
+	box.position = Vector3(-70, 0.15, 110)
+	runner.add_child(box)
+	await _ticks(2)
+	s = _spawn(Vector3(-70, 0.27, 110), 0.0)
+	await _ticks(tps / 2)
+	_check(s.is_stuck() and not s.is_fallen(),
+			"recovery: high-centred on a box (stuck %s, fallen %s)" % [s.is_stuck(), s.is_fallen()])
+	var got_up := false
+	for i in int((tuning.auto_recover_delay + 2.0) * tps):
+		await _ticks(1)
+		if s.is_grounded() and s.global_basis.y.y > 0.99 and s.linear_velocity.length() < 0.05 \
+				and s.global_position.y < 0.05:
+			got_up = true
+			break
+	_check(got_up, "recovery: gets off the box and stands on the ground (y %.2f)" % s.global_position.y)
+	s.queue_free()
+	box.queue_free()
+
 	# Tap reset while riding: upright and stopped at once, same heading.
 	var start := Vector3(-40, 0, 110)
 	s = _spawn(start, 30.0, Basis(Vector3.UP, deg_to_rad(30.0)) * Vector3(0, 0, -4.0))
@@ -323,9 +350,9 @@ func _energy(s: Scooter) -> float:
 			+ s.front_wheel.spring_energy(tuning) + s.rear_wheel.spring_energy(tuning)
 
 
-## Work done so far by (wheels, rider's legs and hips).
+## Work done so far by (wheels plus balance assist, rider's legs and hips).
 func _work(s: Scooter) -> Vector2:
-	return Vector2(s.front_wheel.work_done + s.rear_wheel.work_done, s.rider.work_done)
+	return Vector2(s.front_wheel.work_done + s.rear_wheel.work_done + s.assist_work, s.rider.work_done)
 
 
 func _check(condition: bool, description: String) -> void:

@@ -9,6 +9,7 @@
 [ext_resource type="PhysicsMaterial" path="res://scenes/props/materials/concrete.tres" id="6_concrete"]
 [ext_resource type="PackedScene" path="res://scooter/scooter.tscn" id="7_scooter"]
 [ext_resource type="Script" path="res://camera/chase_camera.gd" id="8_chase"]
+[ext_resource type="Script" path="res://debug/plot_hud.gd" id="9_plots"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -90,6 +91,16 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("5_hud")
+
+[node name="PlotHud" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_plots")
 
 [node name="TuningPanel" type="CanvasLayer" parent="." unique_id=2095795409]
 script = ExtResource("3_tuning")

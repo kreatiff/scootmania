@@ -23,6 +23,12 @@ extends ProfileProp
 	set(value):
 		transition_radius = value
 		queue_rebuild()
+## Radius of the rounded edge from the slope onto the deck. A sharp edge
+## catches the scooter's deck between the wheels (a "hang-up"). 0 = sharp.
+@export_range(0.0, 2.0, 0.05, "suffix:m") var top_radius := 0.4:
+	set(value):
+		top_radius = value
+		queue_rebuild()
 @export_range(2, 32, 1) var segments := 12:
 	set(value):
 		segments = value
@@ -31,7 +37,7 @@ extends ProfileProp
 
 func _profile() -> PackedVector2Array:
 	var theta := deg_to_rad(angle_deg)
-	# Keep the curve below the deck.
+	# Keep the bottom curve below the deck.
 	var r := minf(transition_radius, height * 0.9 / (1.0 - cos(theta)))
 	var pts := PackedVector2Array([Vector2.ZERO])
 	if r > 0.0:
@@ -39,14 +45,27 @@ func _profile() -> PackedVector2Array:
 			var a := theta * k / segments
 			pts.append(Vector2(-r * sin(a), r * (1.0 - cos(a))))
 	var curve_end := pts[pts.size() - 1]
-	var top_z := curve_end.x - (height - curve_end.y) / tan(theta)
-	pts.append(Vector2(top_z, height))
-	pts.append(Vector2(top_z - deck_length, height))
-	pts.append(Vector2(top_z - deck_length, 0.0))
+	# Where the slope would meet the deck if the edge were sharp.
+	var corner_z := curve_end.x - (height - curve_end.y) / tan(theta)
+	# Rounded top edge: an arc tangent to the slope and to the deck.
+	var tangent_len := minf(top_radius * tan(theta * 0.5), deck_length * 0.5)
+	var rt := tangent_len / tan(theta * 0.5) if theta > 0.0 else 0.0
+	if rt > 0.0:
+		var center := Vector2(corner_z - tangent_len, height - rt)
+		for k in range(segments, -1, -1):
+			var a := theta * k / segments
+			pts.append(center + Vector2(rt * sin(a), rt * cos(a)))
+	else:
+		pts.append(Vector2(corner_z, height))
+	pts.append(Vector2(corner_z - deck_length, height))
+	pts.append(Vector2(corner_z - deck_length, 0.0))
 	return pts
 
 
-## Horizontal length from the start of the curve to the top of the slope.
+## Horizontal distance from the start of the bottom curve to where the
+## slope meets the deck (the corner, if the top edge were sharp).
 func slope_length() -> float:
-	var pts := _profile()
-	return -pts[pts.size() - 3].x
+	var theta := deg_to_rad(angle_deg)
+	var r := minf(transition_radius, height * 0.9 / (1.0 - cos(theta)))
+	var curve_end := Vector2(-r * sin(theta), r * (1.0 - cos(theta)))
+	return -(curve_end.x - (height - curve_end.y) / tan(theta))

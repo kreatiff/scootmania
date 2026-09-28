@@ -11,6 +11,10 @@ extends Node
 var enabled := true
 ## Named telemetry lines shown on the HUD, e.g. watch("speed", "12 km/h").
 var watches := {}
+## Named time series drawn as graphs on the HUD: name -> PackedFloat32Array.
+var plots := {}
+## Samples kept per plot.
+const PLOT_LENGTH := 600
 
 var _lines := PackedVector3Array()
 var _colors := PackedColorArray()
@@ -89,6 +93,16 @@ func watch(label: String, text: String) -> void:
 
 func clear_watches() -> void:
 	watches.clear()
+
+
+## Appends a sample to a graph on the HUD. Call once per physics tick (or at
+## any steady rate); the last PLOT_LENGTH samples are shown.
+func plot(label: String, value: float) -> void:
+	var series: PackedFloat32Array = plots.get(label, PackedFloat32Array())
+	series.append(value)
+	if series.size() > PLOT_LENGTH:
+		series = series.slice(series.size() - PLOT_LENGTH)
+	plots[label] = series
 
 
 ## A small 3-axis cross at a point.

@@ -38,6 +38,7 @@ func _ready() -> void:
 	park.queue_free()
 
 	await ScooterTests.new(self).run()
+	await PumpPopTests.new(self).run()
 
 	stage = Stage.RECORDING
 	RiderInput.start_recording()

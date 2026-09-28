@@ -36,6 +36,12 @@ var rolling_speed := 0.0
 ## Negative = energy taken out (damping, rolling resistance, sliding).
 var work_done := 0.0
 
+# Last tick's applied force, where on the body (local), and that point's
+# velocity when applied: to count its work with the step's average velocity.
+var _last_force := Vector3.ZERO
+var _last_local_point := Vector3.ZERO
+var _last_velocity := Vector3.ZERO
+
 var _cast := ShapeCast3D.new()
 var _sphere := SphereShape3D.new()
 var _visual := Node3D.new()
@@ -60,6 +66,7 @@ func setup(body: RigidBody3D, visual_mesh: Mesh, visual_material: Material) -> v
 
 ## Computes and applies this wheel's forces to `body` for one tick.
 func simulate(body: Scooter, tuning: ScooterTuning, delta: float) -> void:
+	_finish_work(body, delta)
 	var radius := tuning.wheel_radius
 	var travel := tuning.wheel_travel
 	var up := body.global_basis.y
@@ -145,7 +152,25 @@ func simulate(body: Scooter, tuning: ScooterTuning, delta: float) -> void:
 	var total := contact_normal * normal_force + tangential_force
 	body.add_tracked_force(total, contact_point)
 	work_done += total.dot(v) * delta
+	_last_force = total
+	_last_local_point = body.global_transform.affine_inverse() * contact_point
+	_last_velocity = v
 	_update_visual(compression, delta)
+
+
+## Work was counted with the velocity at the start of the step; the physics
+## step then moved at the end velocity. Adding half the difference counts
+## it with the average, which is exact for a force held over the step.
+## (Without this, big fast-changing forces drift an energy audit by tens
+## of joules per second.)
+func _finish_work(body: RigidBody3D, delta: float) -> void:
+	if _last_force == Vector3.ZERO:
+		return
+	var point := body.global_transform * _last_local_point
+	var com := body.global_transform * body.center_of_mass
+	var v_now := body.linear_velocity + body.angular_velocity.cross(point - com)
+	work_done += 0.5 * _last_force.dot(v_now - _last_velocity) * delta
+	_last_force = Vector3.ZERO
 
 
 ## Elastic energy currently stored in the wheel's spring, J.

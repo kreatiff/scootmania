@@ -260,22 +260,42 @@ everything above the knees rides on the legs.
       controller)*.
 - [ ] Braking hard with the rear-only brake behaves believably *(same)*.
 
-### Phase 4 — Compression, pop and pumping (M)
+### Phase 4 — Compression, pop and pumping (M) ✅
 **Goal:** the rider's legs add and remove energy, as they do in real life.
-- [ ] Right stick down = compress the legs (lower centre of mass). Release
-      or flick up = extend with force (pop).
-- [ ] **Pop**: extending quickly while grounded produces a small hop.
-      Scooter riders do this with the deck, like a bunny hop.
-- [ ] **Pumping**: compressing into a transition and extending out of it
-      raises the rider's centre of mass against centripetal force, which
-      adds kinetic energy. It isn't scripted: it emerges from the leg forces
-      in Phase 3.
-- [ ] Energy telemetry: plot kinetic + potential energy over time so
-      you can *see* pumping gain energy and friction lose it.
+- [x] Right stick down = crouch (shorter legs), up = extend. Built in
+      Phase 3; the legs are real forces, so everything below emerges.
+- [x] **Pop**: crouch, then flick up. The legs push at up to 2,000 N, lock
+      straight and lift the scooter with the body. Clears ~0.34 m from
+      rolling, and **nothing without the crouch** (skate.-style).
+- [x] **Pumping**: extending up the transitions and crouching elsewhere
+      keeps a mini ramp going without kicking. Not scripted: it comes from
+      the leg forces. Leg damping lowered (0.35) so active pushing isn't
+      taxed by the damper.
+- [x] **Fakie**: the mini ramp is ridden backwards on every other wall.
+      Balance steering keeps the same sign rolling backwards (a sign flip
+      I tried first made fakie fall over).
+- [x] **Energy graph** on the HUD (top right): total mechanical energy and
+      leg force over the last 10 s.
+- [x] Energy audits made exact: work is counted with each step's average
+      velocity. Counting with the start velocity drifted ~25 J/s under
+      pumping.
 
-**Exit criteria:** you can keep going back and forth on the mini ramp
-**without kicking**, using pumping alone. Energy telemetry shows the
-gain on each pump.
+Fixes found along the way:
+- A sideways hip-force instability when the scooter is steeply pitched
+  and airborne (yaw wobble at ±30 rad/s): the reaction now acts on the
+  scooter's own upright axis, and damping is sized for the effective mass.
+- The bank's sharp top edge caught the deck between the wheels: it now has
+  a rounded edge (`top_radius`, 0 = sharp).
+- A scooter hung up on its deck (not tipped, wheels off the ground,
+  stopped) now counts as down for recovery, and recovery finds a spot with
+  level ground for both wheels instead of standing you back on a box.
+
+**Exit criteria (automated):**
+- [x] Pop clears the ground from a crouch, not without one, and lands upright.
+- [x] Popping at the kicker's lip flies higher and longer than rolling off.
+- [x] Pumping keeps the mini ramp going for 20 s without kicking (a passive
+      rider stops), and the energy audit shows the gain comes from the legs.
+- [ ] Pumping the mini ramp by hand, with a controller, feels right *(you)*.
 
 ### Phase 5 — Airs, landings and bails (M)
 **Goal:** leaving the ground, controlling the air, and landing or bailing.

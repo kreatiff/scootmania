@@ -39,6 +39,10 @@ var target_lean := 0.0
 var lean_rate := 0.0
 ## Last balance torque applied, N·m (+ leans right). For telemetry and tests.
 var balance_torque := 0.0
+## Running total of work done by the balance assist (an outside force), J.
+var assist_work := 0.0
+var _last_assist_force := Vector3.ZERO
+var _last_assist_velocity := Vector3.ZERO
 ## How long the scooter has been tipped past fallen_angle_deg, s.
 var fallen_time := 0.0
 
@@ -55,6 +59,7 @@ var _push_time_left := 0.0
 var _kick_was_down := false
 var _steering_visual := Node3D.new()
 var _leg_visual := MeshInstance3D.new()
+var _plot_tick := 0
 var _spawn_transform := Transform3D()
 var _reset_held_time := 0.0
 var _respawned_this_hold := false
@@ -108,6 +113,9 @@ func _physics_process(delta: float) -> void:
 	rider.simulate(self, tuning, intent, lean_angle, lean_rate, target_lean)
 	_apply_push(intent, speed, grounded, delta)
 	_apply_drag()
+	# Finish last tick's assist work with the step's average velocity.
+	assist_work += 0.5 * _last_assist_force.dot(rider.linear_velocity - _last_assist_velocity) * delta
+	_last_assist_force = Vector3.ZERO
 	if grounded:
 		_apply_balance_torque(speed)
 	front_wheel.simulate(self, tuning, delta)
@@ -138,10 +146,18 @@ func is_fallen() -> bool:
 	return global_basis.y.dot(Vector3.UP) < cos(deg_to_rad(tuning.fallen_angle_deg))
 
 
+## Hung up: wheels off the ground and not moving, e.g. resting on the deck
+## across a ramp. Not tipped far enough to count as fallen, but not riding.
+func is_stuck() -> bool:
+	return not is_grounded() and linear_velocity.length() < 0.3 \
+			and rider.linear_velocity.length() < 0.3
+
+
 ## Stands the scooter up where it is: on the surface below, facing the way
-## it was heading, stopped. On a surface too steep to stand on (say, high
-## on a quarter pipe) it moves down the fall line to the first spot where
-## both wheels have level ground, the way a fallen rider slides down.
+## it was heading, stopped. Wherever that is, both wheels need level ground
+## at the same height: on a slope too steep to stand on it moves down the
+## fall line (the way a fallen rider slides down), and if it's high-centred
+## on something it moves off it, to the nearest spot that works.
 func recover_in_place() -> void:
 	var heading := _flat(-global_basis.z)
 	if heading == Vector3.ZERO:
@@ -153,17 +169,20 @@ func recover_in_place() -> void:
 		_place(global_position, Vector3.UP, heading)
 		return
 	var normal: Vector3 = hit["normal"]
-	if normal.y > 0.9:
+	if normal.y > 0.9 and _can_stand_at(hit["position"], heading):
 		_place(hit["position"], normal, heading)
 		return
-	var downhill := _flat(normal)
-	var probe: Vector3 = hit["position"]
-	for step in 40:
-		probe += downhill * 0.25
-		var spot := _ground_below(probe)
-		if not spot.is_empty() and _can_stand_at(spot["position"], heading):
-			_place(spot["position"], Vector3.UP, heading)
-			return
+	var directions: Array[Vector3] = []
+	if normal.y <= 0.9:
+		directions.append(_flat(normal)) # downhill first
+	var side := heading.cross(Vector3.UP)
+	directions.append_array([-heading, heading, side, -side])
+	for step in range(1, 17):
+		for direction in directions:
+			var spot := _ground_below(global_position + direction * step * 0.25)
+			if not spot.is_empty() and _can_stand_at(spot["position"], heading):
+				_place(spot["position"], Vector3.UP, heading)
+				return
 	_place(hit["position"] + Vector3.UP * 0.5, Vector3.UP, heading)
 
 
@@ -208,7 +227,7 @@ func _handle_recovery(intent: RiderIntent, delta: float) -> bool:
 		_reset_held_time = 0.0
 		_respawned_this_hold = false
 
-	if is_fallen():
+	if is_fallen() or is_stuck():
 		fallen_time += delta
 		var delay := tuning.auto_recover_delay
 		if delay > 0.0:
@@ -289,6 +308,8 @@ func _update_steering(intent: RiderIntent, speed: float, delta: float) -> void:
 				+ tuning.countersteer_damping * lean_rate
 		var lateral := GRAVITY * (tan(lean_angle) + correction)
 		var ground_tan := tuning.wheelbase * lateral / (v * v)
+		# Same sign rolling backwards (fakie): steering right still curves
+		# the path toward the scooter's right, since a = v²·tan(steer)/L.
 		balance = atan(ground_tan / sin(deg_to_rad(tuning.headtube_angle_deg)))
 	var blend := clampf(inverse_lerp(tuning.lean_steer_min_speed, tuning.lean_steer_full_speed, v), 0.0, 1.0)
 	var t := clampf(v / tuning.steer_fast_speed, 0.0, 1.0)
@@ -333,7 +354,11 @@ func _apply_balance_torque(speed: float) -> void:
 	if heading == Vector3.ZERO or balance_torque == 0.0:
 		return
 	var height := maxf(rider.global_position.y - global_position.y, 0.3)
-	rider.apply_central_force(heading.cross(Vector3.UP) * balance_torque / height)
+	var force := heading.cross(Vector3.UP) * balance_torque / height
+	rider.apply_central_force(force)
+	assist_work += force.dot(rider.linear_velocity) * get_physics_process_delta_time()
+	_last_assist_force = force
+	_last_assist_velocity = rider.linear_velocity
 
 
 ## Lean of the whole system: the angle, seen along the direction of travel,
@@ -350,6 +375,18 @@ func system_lean() -> float:
 	var right := heading.cross(Vector3.UP)
 	var d := com - base
 	return atan2(d.dot(right), d.dot(Vector3.UP))
+
+
+## Kinetic + gravitational energy of scooter and rider, J (height measured
+## from y = 0). Rises when the rider pumps, falls to friction and drag.
+func system_energy() -> float:
+	var inertia := get_inverse_inertia_tensor().inverse()
+	var own := global_transform * center_of_mass
+	return 0.5 * mass * linear_velocity.length_squared() \
+			+ 0.5 * angular_velocity.dot(inertia * angular_velocity) \
+			+ mass * GRAVITY * own.y \
+			+ 0.5 * rider.mass * rider.linear_velocity.length_squared() \
+			+ rider.mass * GRAVITY * rider.global_position.y
 
 
 func system_center_of_mass() -> Vector3:
@@ -370,6 +407,10 @@ func _draw_debug(speed: float) -> void:
 	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
 			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])
 	DebugDraw.point(system_center_of_mass(), Color.ORANGE_RED, 0.08)
+	_plot_tick += 1
+	if _plot_tick % 4 == 0: # 600 samples ≈ 10 s at 240 Hz
+		DebugDraw.plot("energy J", system_energy())
+		DebugDraw.plot("leg force N", rider.leg_force)
 
 
 static func _wheel_text(wheel: ScooterWheel) -> String:

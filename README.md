@@ -14,7 +14,7 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 | Action | Gamepad | Keyboard fallback |
 |---|---|---|
 | Lean (steers) / weight | Left stick | WASD |
-| Pose (compress / extend, tricks) | Right stick | Arrow keys |
+| Crouch / extend (pop, pump) | Right stick down / up | Arrow keys |
 | Rear brake | Right trigger | Shift |
 | Kick | A / Cross | Space |
 | Stand up where you are (tap) | Start | R |
@@ -61,13 +61,21 @@ Two physics bodies, split the way a real body splits:
   over the deck by the **hips**. On ramps, the legs soak up the transition
   while the scooter follows the ramp.
 
+**Legs: crouch, pop, pump.** Right stick down crouches; up extends.
+- **Pop:** crouch, then flick up. The legs push off and lift the scooter
+  (~30 cm from rolling). No crouch, no pop.
+- **Pump:** on a ramp, push up (extend) as you go up the transition and
+  crouch as you come back down. You gain speed without kicking; the
+  "energy" graph (top right) shows it.
+
 **Lean steers, with countersteering.** The left stick sets how far you
 lean. To lean in, the bars flick the other way for a moment, then steer
 into the turn to balance the lean, the way a real rider balances a bike
 or scooter. At walking pace it steers directly, and a "foot down" assist
 keeps you upright when nearly stopped.
 
-**Falling over:** tipped past 60°, the rider lets go. After 1.5 s the
+**Falling over:** tipped past 60° (or hung up: wheels off the ground and
+stopped), the rider lets go. After 1.5 s the
 scooter stands itself up where it came to rest (the delay is a slider;
 0 turns it off). Tap Start / R to stand up at once, or hold it to go back
 to the spawn point.
@@ -90,6 +98,8 @@ mass, red cross = combined centre of mass, white = velocity.
   restarts the scene and replays it tick for tick. The physics is
   deterministic on the same build and machine, so a replay reproduces a run
   exactly. Use it to compare two tunings on identical input.
+- **Graphs** (top right): any value passed to `DebugDraw.plot()`, over
+  the last ~10 s. The scooter plots its total energy and leg force.
 - **DebugDraw** (autoload): `DebugDraw.arrow()`, `.line()`, `.point()`,
   `.axes()` from any `_physics_process`.
 
@@ -109,5 +119,7 @@ instead of in real time. Exits with 0 on success. It includes:
 - scooter physics checked against hand-calculated values: statics at rest,
   coast distance, energy audits (bank, kicker) covering both bodies and the
   rider's muscle work, the rear wheel staying planted on the kicker,
-  bicycle-model steering, grip on concrete versus steel, and recovery. "note" lines report criteria that
+  bicycle-model steering, grip on concrete versus steel, and recovery;
+- legs: pop height (with and without a crouch), popping off the kicker,
+  and pumping a mini ramp for 20 s with an energy audit. "note" lines report criteria that
   belong to a later phase.

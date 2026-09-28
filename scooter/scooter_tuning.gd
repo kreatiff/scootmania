@@ -78,7 +78,7 @@ extends Resource
 @export_group("Legs")
 ## Spring toward the chosen leg length. Lower is softer knees.
 @export_range(2000.0, 40000.0, 250.0, "suffix:N/m") var leg_stiffness := 9000.0
-@export_range(0.1, 2.0, 0.05) var leg_damping_ratio := 0.6
+@export_range(0.1, 2.0, 0.05) var leg_damping_ratio := 0.35
 ## Strongest push the legs can make (about 3× body weight).
 @export_range(500.0, 5000.0, 50.0, "suffix:N") var leg_max_push := 2000.0
 ## Strongest pull, through the arms on the bars.
