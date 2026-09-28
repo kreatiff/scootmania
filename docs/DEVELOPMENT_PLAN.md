@@ -394,11 +394,12 @@ Changes:
 - **Leaning onto the foot feeds speed back in.** Leaning 40° into a pivot
   drops the centre of mass ~20 cm, which comes out as speed and widens
   the turn. Real riders stay fairly upright and let the foot take it.
-- **Known bug, not fixed yet:** in long airs (> ~0.8 s) with some roll or
-  yaw, the sideways hip spring and air control's roll levelling feed each
-  other into a growing wobble. It shows up as ~15 W of unexplained energy
-  in airborne ticks. The pumping audit now only fails on energy *created*,
-  and reports the loss.
+- **A spring must measure its stretch where it pushes.** The sideways hip
+  spring measured at the feet but pushed the scooter at hip height, on
+  either side of its centre of mass: in the air, pushing the hips back
+  rolled the feet further away. With some roll or yaw that grew into a
+  wobble in long airs, fed by ~1 kJ from the hips. Found with a free-flight
+  energy audit; measuring at the hip-height point fixed it.
 
 ### Phase 6 — Chase camera (S–M)
 **Goal:** a camera that makes the riding readable and feel fast.

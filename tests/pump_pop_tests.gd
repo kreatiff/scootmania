@@ -116,7 +116,7 @@ func _test_pumping() -> void:
 			% [passive[0], pumped[0]])
 	_check(passive[1] < 0.05, "mini ramp: passive rider stops (%.2f m/s)" % passive[1])
 	_check(pumped[0] > 0.3, "mini ramp: pumping still rides %.2f m up the walls after 20 s" % pumped[0])
-	_check(pumped[2], "mini ramp: pumping makes no energy of its own (%s)" % pumped[3])
+	_check(pumped[2], "mini ramp: energy audit balances while pumping (%s)" % pumped[3])
 	for q in ramps:
 		q.queue_free()
 
@@ -160,14 +160,11 @@ func _ride_mini_ramp(origin: Vector3, pump: bool) -> Array:
 			clean_ticks += 1
 		if i > duration - tps * 5:
 			highest = maxf(highest, s.global_position.y)
-	# What the audit guards against is physics *making* energy, so pumping
-	# would work for the wrong reason. Each tick carries up to ±0.5 J of
-	# integration error from the stiff legs (average velocity over the step
-	# is exact only for a constant force), which over 20 s sums to a small
-	# net loss; that's numerical damping, reported but not failed.
+	# The audit guards against physics making energy (pumping would work for
+	# the wrong reason) and against forces nobody accounts for losing it.
 	var clean_share := clean_ticks / float(duration)
 	var result := [highest, s.linear_velocity.length(),
-			residual < 0.03 * e0 and clean_share > 0.8,
+			absf(residual) < 0.03 * e0 and clean_share > 0.8,
 			"%+.0f J unexplained (%.1f%% of the start) over the %.0f%% of ticks without a body scrape"
 			% [residual, residual / e0 * 100.0, clean_share * 100.0]]
 	s.queue_free()

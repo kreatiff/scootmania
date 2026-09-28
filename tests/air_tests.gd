@@ -6,6 +6,7 @@ extends ScooterTests
 func run() -> void:
 	await _test_kicker_landings()
 	await _test_air_control()
+	await _test_free_flight_audit()
 	await _test_bad_landing_bails()
 	await _test_air_back_in()
 	await _test_slow_motion()
@@ -87,6 +88,58 @@ func _air_rotation(kicker: Kicker, stick: Vector2) -> Array:
 	var yaw_change := rad_to_deg(wrapf(s.global_basis.get_euler().y - yaw0, -PI, PI))
 	s.queue_free()
 	return [pitch_change, yaw_change]
+
+
+## Thrown high with a spin and no input, for 2 s: the energy audit
+## balances (everything the hips, legs, air control and drag did is
+## accounted for), and the spin doesn't grow into a wobble. The hips and the
+## roll levelling used to feed each other here (the hip spring measured its
+## stretch at the feet but pushed at hip height).
+func _test_free_flight_audit() -> void:
+	for spin in [Vector3(1.0, 0.5, 0.3), Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.5, 0.0)]:
+		var audit := await _free_flight(spin)
+		runner.note("free flight, spin %s: %s" % [spin, audit[1]])
+		_check(audit[0], "free flight: energy audit balances with spin %s (%s)" % [spin, audit[1]])
+		_check(audit[2] <= spin.length() * 1.05,
+				"free flight: spin %s doesn't grow (peak %.2f rad/s in the second half)" % [spin, audit[2]])
+
+
+## Returns [audit balanced, audit text, peak angular speed in the second
+## second]. Energies are measured from the start height, so the audit is
+## held to 3% of the motion's energy rather than of 60 m of height, and
+## with the engine's gravity (the project default, not Scooter.GRAVITY).
+func _free_flight(spin: Vector3) -> Array:
+	var at := Vector3(200, 60, 200)
+	var s := _spawn(at, 0.0, Vector3(0, 2, -3))
+	s.angular_velocity = spin
+	await _ticks(1)
+	var g: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+	var total_mass := s.mass + s.rider.mass
+	var height_energy := total_mass * g * at.y
+	var e0 := _energy(s, g) - height_energy
+	var work0 := _work(s)
+	var air_work0 := s.air_work
+	var c := 0.5 * Scooter.AIR_DENSITY * tuning.drag_area
+	var drag_work := 0.0
+	var peak := 0.0
+	var grounded := false
+	for i in tps * 2:
+		var v := s.rider.linear_velocity.length()
+		drag_work -= c * v * v * v / tps
+		await _ticks(1)
+		grounded = grounded or s.is_grounded() or s.air.assist_active
+		if i >= tps:
+			peak = maxf(peak, s.angular_velocity.length())
+	# The integrator (velocity first, then position) falls a little further
+	# each tick than the speed it gains pays for: ½·m·g²·dt² per tick.
+	var dt := 1.0 / tps
+	var integration := -0.5 * total_mass * g * g * dt * dt * tps * 2
+	var work := _work(s) - work0
+	var residual := (_energy(s, g) - height_energy) - (e0 + work.x + work.y + drag_work + integration)
+	var text := "%+.1f J unexplained of %.0f J; hips and legs %+.0f J, air control %+.0f J, drag %+.0f J" % [
+			residual, e0, work.y, s.air_work - air_work0, drag_work]
+	s.queue_free()
+	return [absf(residual) < 0.03 * e0 and not grounded, text, peak]
 
 
 ## Dropped nose-high from a metre up, too far out for the assist to save:

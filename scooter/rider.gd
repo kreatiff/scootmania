@@ -134,10 +134,15 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	# axis only (the legs handle along it). Sideways, the reaction goes into
 	# the scooter on its own upright axis (bars and stem), so it can only
 	# roll the scooter, never twist it in yaw however far it's pitched.
-	var target := hip_anchor + right * hip_shift.x + forward * hip_shift.y
-	var error := global_position - target
+	# Each spring measures its stretch where its reaction goes in, or it
+	# isn't a spring: measured at the feet (below the scooter's centre of
+	# mass) but pushing at hip height, the sideways hip rolled the free
+	# scooter the wrong way and fed a growing wobble in the air, where the
+	# leg axis doesn't follow the scooter's roll.
 	var mast_point := feet + scooter.global_basis.y * leg_length
 	var mast_velocity := scooter.linear_velocity + scooter.angular_velocity.cross(mast_point - com)
+	var side_error := (global_position - mast_point).dot(right) - hip_shift.x
+	var fore_error := (global_position - hip_anchor).dot(forward) - hip_shift.y
 	var side_speed := (linear_velocity - mast_velocity).dot(right)
 	var fore_speed := (linear_velocity - feet_velocity).dot(forward)
 	# Damping sized for the mass each force actually meets. Pushed sideways
@@ -145,9 +150,9 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	# effective), and too much damping on a light body diverges.
 	var side_mass := _pair_mass(scooter, mast_point - com, right)
 	var fore_mass := _pair_mass(scooter, feet - com, forward)
-	var sideways_force := -(tuning.hip_stiffness * error.dot(right)
+	var sideways_force := -(tuning.hip_stiffness * side_error
 			+ _damping(tuning.hip_stiffness, tuning.hip_damping_ratio, side_mass) * side_speed)
-	var fore_aft_force := -(tuning.hip_stiffness * error.dot(forward)
+	var fore_aft_force := -(tuning.hip_stiffness * fore_error
 			+ _damping(tuning.hip_stiffness, tuning.hip_damping_ratio, fore_mass) * fore_speed)
 
 	var leg := axis * leg_force

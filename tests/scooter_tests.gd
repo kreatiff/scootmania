@@ -342,14 +342,15 @@ func _ticks(n: int) -> void:
 ## Total mechanical energy of scooter and rider: motion, height, and the
 ## wheel springs. (Leg forces aren't conservative, so their work is tracked
 ## separately in rider.work_done.)
-func _energy(s: Scooter) -> float:
+## `g` is the gravity the heights are weighed with.
+func _energy(s: Scooter, g := G) -> float:
 	var com := s.global_transform * s.center_of_mass
 	var inertia := s.get_inverse_inertia_tensor().inverse()
 	var r := s.rider
 	return 0.5 * s.mass * s.linear_velocity.length_squared() \
 			+ 0.5 * s.angular_velocity.dot(inertia * s.angular_velocity) \
-			+ s.mass * G * com.y \
-			+ 0.5 * r.mass * r.linear_velocity.length_squared() + r.mass * G * r.global_position.y \
+			+ s.mass * g * com.y \
+			+ 0.5 * r.mass * r.linear_velocity.length_squared() + r.mass * g * r.global_position.y \
 			+ s.front_wheel.spring_energy(tuning) + s.rear_wheel.spring_energy(tuning)
 
 
