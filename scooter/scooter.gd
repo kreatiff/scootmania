@@ -13,12 +13,13 @@ extends RigidBody3D
 ## the *current* lean at the current speed (the way a bike's front wheel
 ## falls into a lean). Steering without leaning would throw a rider off the
 ## outside of the turn, and a first prototype that steered directly did
-## exactly that.
+## exactly that. Full stick asks only for as much lean as the turn can hold
+## up at this speed and on this surface (holdable_lean).
 ##
 ## "Lean" means the whole system's lean: where the combined centre of mass
-## sits over the wheels' contact line. The rider changes it by shifting
-## their hips. Near standstill, where nobody can balance by steering, a
-## balance torque stands in for putting a foot down.
+## sits over the wheels' contact line. Near standstill, where nobody can
+## balance by steering, and when the left trigger plants the foot, the foot
+## on the ground holds the rider up (FootPlant).
 
 ## A landing was graded (AirControl.Landing).
 signal landed(grade: int)
@@ -49,6 +50,7 @@ var assist_work := 0.0
 ## Running total of work done by air control torques, J.
 var air_work := 0.0
 var air := AirControl.new()
+var foot := FootPlant.new()
 var _last_assist_force := Vector3.ZERO
 var _last_assist_velocity := Vector3.ZERO
 ## How long the scooter has been tipped past fallen_angle_deg, s.
@@ -66,7 +68,9 @@ var rider := Rider.new()
 var _push_time_left := 0.0
 var _kick_was_down := false
 var _steering_visual := Node3D.new()
+var _last_surface_grip := 0.9
 var _leg_visual := MeshInstance3D.new()
+var _foot_visual := MeshInstance3D.new()
 var _plot_tick := 0
 var _spawn_transform := Transform3D()
 var _reset_held_time := 0.0
@@ -105,7 +109,8 @@ func _physics_process(delta: float) -> void:
 		return # teleported this tick; forces resume next tick
 	var speed := -linear_velocity.dot(global_basis.z)
 
-	_update_lean(intent, delta)
+	foot.update(self, tuning, intent, speed)
+	_update_lean(intent, speed, delta)
 	_update_steering(intent, speed, delta)
 	front_wheel.steer_angle = steer_angle
 	rear_wheel.brake = intent.brake
@@ -121,6 +126,7 @@ func _physics_process(delta: float) -> void:
 	rider.simulate(self, tuning, intent, lean_angle, lean_rate, target_lean)
 	_apply_push(intent, speed, grounded, delta)
 	_apply_drag()
+	foot.apply_scuff(self, tuning, delta)
 	# Finish last tick's assist work with the step's average velocity.
 	assist_work += 0.5 * _last_assist_force.dot(rider.linear_velocity - _last_assist_velocity) * delta
 	_last_assist_force = Vector3.ZERO
@@ -313,12 +319,45 @@ func _apply_mass_properties() -> void:
 	rear_wheel.position = Vector3(0, tuning.wheel_radius, half)
 
 
-func _update_lean(intent: RiderIntent, delta: float) -> void:
+## The stick asks for a lean, never more than the turn can hold up
+## (holdable_lean): full stick is "turn as hard as you can", so steering
+## alone never tips you over. Too much lean still happens, from outside:
+## riding onto steel mid-carve, or a sketchy landing.
+func _update_lean(intent: RiderIntent, speed: float, delta: float) -> void:
 	var previous := lean_angle
 	lean_angle = system_lean()
 	lean_rate = lerpf(lean_rate, (lean_angle - previous) / delta, 0.3)
-	var wanted := intent.lean.x * deg_to_rad(tuning.max_lean_deg)
+	var wanted := intent.lean.x * holdable_lean(absf(speed))
+	if foot.held:
+		wanted = foot.lean_target(self, tuning, speed)
 	target_lean = move_toward(target_lean, wanted, deg_to_rad(tuning.lean_rate_deg) * delta)
+
+
+## The furthest lean a turn can hold up at this speed, radians: limited by
+## the tyres' grip (tan(lean) = sideways g) and by how tight the steering
+## can turn, each with a margin, and by max_lean_deg.
+func holdable_lean(speed: float) -> float:
+	var grip := tuning.grip_scale * surface_grip() * tuning.lean_grip_margin
+	var steer_tan := tan(_steer_limit(speed)) * sin(deg_to_rad(tuning.headtube_angle_deg))
+	var turn := speed * speed * steer_tan / tuning.wheelbase / GRAVITY * tuning.lean_steer_margin
+	return minf(atan(minf(grip, turn)), deg_to_rad(tuning.max_lean_deg))
+
+
+## The slipperiest surface under the wheels (it
+## decides when the turn lets go). Keeps the last value while airborne.
+func surface_grip() -> float:
+	var mu := INF
+	for wheel in [front_wheel, rear_wheel]:
+		if wheel.in_contact:
+			mu = minf(mu, wheel.surface_friction)
+	if mu != INF:
+		_last_surface_grip = mu
+	return _last_surface_grip
+
+
+func _steer_limit(speed: float) -> float:
+	var t := clampf(speed / tuning.steer_fast_speed, 0.0, 1.0)
+	return deg_to_rad(lerpf(tuning.max_steer_slow_deg, tuning.max_steer_fast_deg, t))
 
 
 ## Steering is how a rider balances and turns, as on a bike:
@@ -346,9 +385,10 @@ func _update_steering(intent: RiderIntent, speed: float, delta: float) -> void:
 		# the path toward the scooter's right, since a = v²·tan(steer)/L.
 		balance = atan(ground_tan / sin(deg_to_rad(tuning.headtube_angle_deg)))
 	var blend := clampf(inverse_lerp(tuning.lean_steer_min_speed, tuning.lean_steer_full_speed, v), 0.0, 1.0)
-	var t := clampf(v / tuning.steer_fast_speed, 0.0, 1.0)
-	var limit := deg_to_rad(lerpf(tuning.max_steer_slow_deg, tuning.max_steer_fast_deg, t))
+	var limit := _steer_limit(v)
 	var target := clampf(lerpf(direct, balance, blend), -limit, limit)
+	if foot.held:
+		target = foot.steer_target(self, tuning, intent, v)
 	steer_angle = move_toward(steer_angle, target, deg_to_rad(tuning.steer_rate_deg) * delta)
 
 
@@ -357,6 +397,8 @@ func _apply_push(intent: RiderIntent, speed: float, grounded: bool, delta: float
 	if intent.kick and not _kick_was_down:
 		_push_time_left = tuning.push_duration
 	_kick_was_down = intent.kick
+	if foot.held:
+		_push_time_left = 0.0 # the kicking foot is on the ground
 	if _push_time_left <= 0.0:
 		return
 	_push_time_left -= delta
@@ -381,14 +423,27 @@ func _apply_drag() -> void:
 func _apply_balance_torque(speed: float) -> void:
 	var t := clampf(inverse_lerp(tuning.stand_assist_speed, tuning.stand_assist_speed * 2.0, absf(speed)), 0.0, 1.0)
 	var strength := lerpf(tuning.stand_assist, tuning.assist_strength, t)
+	var limit := tuning.max_balance_torque
+	if foot.held:
+		strength = 1.0
+		limit = tuning.foot_max_torque
 	var torque := tuning.assist_stiffness * (target_lean - lean_angle) - tuning.assist_damping * lean_rate
-	torque = clampf(torque, -tuning.max_balance_torque, tuning.max_balance_torque)
+	torque = clampf(torque, -limit, limit)
 	balance_torque = torque * strength
 	var heading := _flat(-global_basis.z)
 	if heading == Vector3.ZERO or balance_torque == 0.0:
 		return
+	# Push square to the rider's path, not the deck's heading: in a tight
+	# turn the rider's path cuts inside the heading, and a push along the
+	# heading's side would also drive them forward (a foot on the ground can
+	# hold you up, not propel you).
+	var side := heading.cross(Vector3.UP)
+	var v := rider.linear_velocity
+	if Vector2(v.x, v.z).length() > 0.3:
+		var across := _flat(v).cross(Vector3.UP)
+		side = across if across.dot(side) > 0.0 else -across
 	var height := maxf(rider.global_position.y - global_position.y, 0.3)
-	var force := heading.cross(Vector3.UP) * balance_torque / height
+	var force := side * balance_torque / height
 	rider.apply_central_force(force)
 	assist_work += force.dot(rider.linear_velocity) * get_physics_process_delta_time()
 	_last_assist_force = force
@@ -470,6 +525,7 @@ func _draw_debug(speed: float) -> void:
 	if air.last_landing != AirControl.Landing.NONE:
 		DebugDraw.watch("landing", "%s  (tilt %.0f°, sideways %.0f°)" % [
 				AirControl.landing_name(air.last_landing), rad_to_deg(air.last_tilt), rad_to_deg(air.last_sideways)])
+	DebugDraw.watch("foot", "HELD (scuffing, full lock)" if foot.held else ("down (standing)" if foot.planted else "on the deck"))
 	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
 			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])
 	DebugDraw.point(system_center_of_mass(), Color.ORANGE_RED, 0.08)
@@ -570,18 +626,35 @@ func _build_rider_visuals() -> void:
 	_leg_visual.top_level = true
 	_leg_visual.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_leg_visual)
+	_foot_visual.mesh = leg
+	_foot_visual.material_override = skin
+	_foot_visual.top_level = true
+	_foot_visual.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_foot_visual.visible = false
+	add_child(_foot_visual)
 
 
 func _process(_delta: float) -> void:
 	var feet := get_global_transform_interpolated() * Vector3(0, tuning.deck_top, tuning.rider_com_offset)
 	var hips := rider.get_global_transform_interpolated().origin
-	var along := hips - feet
+	_place_limb(_leg_visual, feet, hips)
+	_foot_visual.visible = foot.planted
+	if foot.planted:
+		# The foot point moves with the scooter; offset it by the same
+		# interpolation the scooter gets, so it doesn't lag a frame.
+		var shift := get_global_transform_interpolated().origin - global_position
+		_place_limb(_foot_visual, foot.point + shift, hips)
+
+
+## Stretches a unit cylinder between two points.
+static func _place_limb(limb: MeshInstance3D, from: Vector3, to: Vector3) -> void:
+	var along := to - from
 	var length := along.length()
 	if length < 0.01:
 		return
 	var y := along / length
 	var x := y.cross(Vector3.FORWARD if absf(y.z) < 0.9 else Vector3.RIGHT).normalized()
-	_leg_visual.global_transform = Transform3D(Basis(x, y * length, x.cross(y)), (feet + hips) * 0.5)
+	limb.global_transform = Transform3D(Basis(x, y * length, x.cross(y)), (from + to) * 0.5)
 
 
 func _add_collision(shape: Shape3D, xform: Transform3D) -> void:

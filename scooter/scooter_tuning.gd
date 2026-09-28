@@ -58,8 +58,16 @@ extends Resource
 @export_range(0.0, 1.5, 0.05, "suffix:m²") var drag_area := 0.5
 
 @export_group("Lean and steering")
-## Lean at full stick. 35° is a hard carve.
+## Lean at full stick, at most. On concrete, the grip margin below
+## limits it to about 26° first.
 @export_range(10.0, 50.0, 1.0, "suffix:°") var max_lean_deg := 35.0
+## Full stick never leans further than the turn can hold up: this fraction
+## of the tyres' grip. The rest is headroom for settling into the lean,
+## which overshoots by up to ~6°; past the grip, the tyres slide out.
+@export_range(0.3, 1.0, 0.01) var lean_grip_margin := 0.55
+## ...and this fraction of the tightest turn the steering allows at the
+## current speed.
+@export_range(0.3, 1.0, 0.01) var lean_steer_margin := 0.6
 ## Below this speed the stick steers directly; above lean_steer_full_speed
 ## the steering only follows the lean.
 @export_range(0.0, 3.0, 0.1, "suffix:m/s") var lean_steer_min_speed := 0.5
@@ -71,9 +79,9 @@ extends Resource
 @export_range(30.0, 720.0, 10.0, "suffix:°/s") var steer_rate_deg := 240.0
 ## Countersteer per radian of lean error (in g of sideways acceleration).
 ## Higher leans in faster.
-@export_range(0.0, 5.0, 0.05) var countersteer_gain := 1.6
+@export_range(0.0, 5.0, 0.05) var countersteer_gain := 2.5
 ## Steering against the lean rate, so leans settle without wobbling.
-@export_range(0.0, 2.0, 0.05, "suffix:s") var countersteer_damping := 0.6
+@export_range(0.0, 2.0, 0.05, "suffix:s") var countersteer_damping := 0.9
 
 @export_group("Legs")
 ## Spring toward the chosen leg length. Lower is softer knees.
@@ -125,6 +133,22 @@ extends Resource
 ## Strongest balance correction a rider could make. Without a cap, a full
 ## stick flick demands more sideways grip than the tyres have.
 @export_range(50.0, 2000.0, 10.0, "suffix:N·m") var max_balance_torque := 450.0
+
+@export_group("Foot plant")
+## Steering lock with the foot down (left trigger), at walking pace.
+@export_range(10.0, 60.0, 1.0, "suffix:°") var foot_steer_deg := 45.0
+## With the foot down, the steering still never asks the tyres for more
+## than this fraction of their grip.
+@export_range(0.3, 1.0, 0.01) var foot_grip_margin := 0.7
+## Friction of the foot scuffing along the ground. 60 N slows the rider
+## by about 0.8 m/s every second.
+@export_range(0.0, 500.0, 5.0, "suffix:N") var foot_scuff_force := 60.0
+## Furthest the rider leans onto the foot.
+@export_range(0.0, 60.0, 1.0, "suffix:°") var foot_max_lean_deg := 12.0
+## How hard the foot can push the rider upright.
+@export_range(50.0, 3000.0, 10.0, "suffix:N·m") var foot_max_torque := 900.0
+## Foot position: this far to the side of the deck.
+@export_range(0.1, 0.6, 0.01, "suffix:m") var foot_offset := 0.3
 
 @export_group("Air and landing")
 ## Both wheels off the ground this long counts as airborne (short hops over

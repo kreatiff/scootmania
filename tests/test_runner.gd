@@ -40,6 +40,7 @@ func _ready() -> void:
 	await ScooterTests.new(self).run()
 	await PumpPopTests.new(self).run()
 	await AirTests.new(self).run()
+	await TurnTests.new(self).run()
 
 	stage = Stage.RECORDING
 	RiderInput.start_recording()
@@ -135,6 +136,7 @@ func _run_unit_tests() -> void:
 	intent.brake = 0.6
 	intent.kick = true
 	intent.reset = true
+	intent.foot = true
 	check(RiderIntent.from_array(intent.to_array()).equals(intent), "intent survives array round trip")
 
 	var frames := PackedFloat64Array([0.1, 0.2, 0.3, 0.4, 0.5, 1.0])

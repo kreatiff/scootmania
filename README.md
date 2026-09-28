@@ -16,6 +16,7 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 | Lean (steers) / in the air: pitch and spin | Left stick | WASD |
 | Crouch / extend (pop, pump) | Right stick down / up | Arrow keys |
 | Rear brake | Right trigger | Shift |
+| Foot plant (tight turns, stop) | Left trigger (hold) | Ctrl |
 | Kick | A / Cross | Space |
 | Stand up where you are (tap) | Start | R |
 | Back to the spawn point (hold ¾ s) | Start | R |
@@ -71,8 +72,19 @@ Two physics bodies, split the way a real body splits:
 **Lean steers, with countersteering.** The left stick sets how far you
 lean. To lean in, the bars flick the other way for a moment, then steer
 into the turn to balance the lean, the way a real rider balances a bike
-or scooter. At walking pace it steers directly, and a "foot down" assist
-keeps you upright when nearly stopped.
+or scooter. Full stick means "turn as hard as you can": it leans only as
+far as the turn can hold you up at this speed and on this surface (about
+26° on concrete, 9° on steel), so steering alone never tips you over.
+Riding onto steel mid-carve still slides you out. At walking pace it steers
+directly.
+
+**Foot plant (hold left trigger).** Your pushing foot comes down beside the
+rear wheel, on the inside of the turn. It holds you up, so the bars go to
+full lock and you turn far tighter than you can carve: at 2.5 m/s, a
+0.65 m radius instead of 2.2 m. The foot scuffs, so it costs speed (at
+speed it's mostly a brake), and you can't kick while it's down. When
+you're nearly stopped the foot goes down by itself to keep you upright,
+without scuffing.
 
 **Airs.** Once both wheels leave the ground, the left stick controls the
 scooter in the air: forward/back pitches the nose down/up, sideways spins.
@@ -136,6 +148,9 @@ instead of in real time. Exits with 0 on success. It includes:
   bicycle-model steering, grip on concrete versus steel, and recovery;
 - legs: pop height (with and without a crouch), popping off the kicker,
   and pumping a mini ramp for 20 s with an energy audit;
+- turning: full stick at every speed from 0.5 to 8 m/s never falls or
+  slides; the foot plant turns in less than 60% of the carving radius at
+  walking pace, scuffs at the expected rate, and blocks kicking;
 - airs: kicker landings with and without the assist, air control (pitch
   hold, nose down, spin), a bad landing that bails and recovers, an air
   back into a vert quarter pipe, and slow motion.

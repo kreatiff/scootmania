@@ -361,6 +361,45 @@ Fixes found along the way:
       anything, but this needs hands-on play to confirm.
 - [ ] Hands-on: does the assist feel fair rather than like autopilot?
 
+### Turning rework (between Phases 5 and 6) ✅
+Pulling the stick hard to one side tipped the rider over. Measured cause:
+- **Below ~2.5 m/s**, the steering can't turn tight enough to hold a 35°
+  lean (at 2 m/s the bars' limit holds ~21°), so you fall into the turn.
+- **Above that**, the lean overshot its target while still falling in;
+  catching it asked the tyres for ~1.1 g against concrete's 0.9, the
+  front slid, grip dropped to 0.63 g, and it slid out from under you.
+
+Changes:
+- [x] **Full stick = "turn as hard as you can".** The stick asks for at most
+      the lean the turn can hold: 55% of the surface's grip (so about 26°
+      on concrete, 9° on steel) and 60% of the tightest turn the steering
+      allows at this speed. Countersteer gain 1.6 → 2.5 and damping
+      0.6 → 0.9 lean in faster, with less overshoot. Tested at every speed
+      from 0.5 to 8 m/s: never falls, no tyre slides.
+- [x] **Foot plant (hold left trigger).** The foot holds you up (an outside
+      force on the rider, like the ground's), the bars go to full lock
+      (45°, limited by what the tyres can turn at the current speed), the
+      lean onto the foot is capped at 12°, the foot scuffs (60 N), and
+      you can't kick with it down. Near standstill it goes down by itself,
+      without scuffing: this replaces the invisible stand assist with a
+      visible foot.
+
+**What we learned:**
+- **A hold-you-up force must push square to your path, not to the deck.**
+  In a tight pivot the rider's path cuts inside the scooter's heading, so
+  a sideways push along the heading also drove them forward. The first
+  foot plant sped the rider up from 1.5 to 2.2 m/s while scuffing. Found
+  with the energy audit. (It also has to use the *flat* speed: near the
+  top of a ramp wall the path points almost anywhere.)
+- **Leaning onto the foot feeds speed back in.** Leaning 40° into a pivot
+  drops the centre of mass ~20 cm, which comes out as speed and widens
+  the turn. Real riders stay fairly upright and let the foot take it.
+- **Known bug, not fixed yet:** in long airs (> ~0.8 s) with some roll or
+  yaw, the sideways hip spring and air control's roll levelling feed each
+  other into a growing wobble. It shows up as ~15 W of unexplained energy
+  in airborne ticks. The pumping audit now only fails on energy *created*,
+  and reports the loss.
+
 ### Phase 6 — Chase camera (S–M)
 **Goal:** a camera that makes the riding readable and feel fast.
 - [ ] Follow with a spring (position lag) and look-ahead in the direction

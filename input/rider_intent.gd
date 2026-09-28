@@ -10,6 +10,9 @@ var lean := Vector2.ZERO
 var pose := Vector2.ZERO
 ## Rear brake, 0..1.
 var brake := 0.0
+## Foot plant (left trigger held): the pushing foot goes down on the
+## ground, for tight turns and standing still.
+var foot := false
 ## Held state of the kick button. Physics detects presses by edge.
 var kick := false
 ## Held state of the reset button: tap = stand up in place, hold = respawn.
@@ -22,6 +25,7 @@ func duplicate_intent() -> RiderIntent:
 	copy.lean = lean
 	copy.pose = pose
 	copy.brake = brake
+	copy.foot = foot
 	copy.kick = kick
 	copy.reset = reset
 	return copy
@@ -29,7 +33,7 @@ func duplicate_intent() -> RiderIntent:
 
 func to_array() -> PackedFloat64Array:
 	return PackedFloat64Array([lean.x, lean.y, pose.x, pose.y, brake,
-			1.0 if kick else 0.0, 1.0 if reset else 0.0])
+			1.0 if kick else 0.0, 1.0 if reset else 0.0, 1.0 if foot else 0.0])
 
 
 static func from_array(a: PackedFloat64Array) -> RiderIntent:
@@ -39,6 +43,7 @@ static func from_array(a: PackedFloat64Array) -> RiderIntent:
 	intent.brake = a[4]
 	intent.kick = a[5] > 0.5
 	intent.reset = a[6] > 0.5
+	intent.foot = a[7] > 0.5
 	return intent
 
 

@@ -199,8 +199,9 @@ func _test_steering() -> void:
 	s.queue_free()
 
 
-## Same hard carve on concrete and on steel: concrete (friction 0.9) grips
-## at about 0.5 g sideways, steel (0.3) can't and slides.
+## Full stick on steel (friction 0.3) leans only as far as steel grips,
+## and holds. Carving hard on concrete when the surface turns to steel
+## underneath (riding onto a steel plate mid-turn) slides out.
 func _test_grip_by_surface() -> void:
 	var plate := StaticBody3D.new()
 	plate.physics_material_override = PropMaterials.STEEL
@@ -212,23 +213,25 @@ func _test_grip_by_surface() -> void:
 	runner.add_child(plate)
 	await _ticks(2)
 
-	var results := {}
-	for surface in ["concrete", "steel"]:
-		var at := Vector3(-120, 0.01, -105) if surface == "steel" else Vector3(-160, 0, -105)
+	var leans := {}
+	var slid := {}
+	for surface in ["concrete", "steel", "turns to steel"]:
+		plate.physics_material_override = PropMaterials.CONCRETE if surface == "turns to steel" else PropMaterials.STEEL
+		var at := Vector3(-160, 0, -105) if surface == "concrete" else Vector3(-120, 0.01, -105)
 		var s := _spawn(at, 0.0, Vector3(0, 0, -5.0))
-		s.manual_intent.lean = Vector2(0.75, 0.0) # ~26° lean, ~0.5 g
-		var slid := false
-		for i in tps * 5 / 4:
+		s.manual_intent.lean = Vector2(1.0, 0.0)
+		slid[surface] = false
+		for i in tps * 2:
 			await _ticks(1)
-			slid = slid or s.front_wheel.sliding or s.rear_wheel.sliding
-		var speed := -s.linear_velocity.dot(s.global_basis.z)
-		var lateral_g := speed * speed * _ground_steer_tan(s.steer_angle) / tuning.wheelbase / G
-		results[surface] = [slid, lateral_g]
+			if surface == "turns to steel" and i == tps * 3 / 2:
+				plate.physics_material_override = PropMaterials.STEEL
+			slid[surface] = slid[surface] or s.front_wheel.sliding or s.rear_wheel.sliding
+		leans[surface] = rad_to_deg(s.lean_angle)
 		s.queue_free()
-	_check(not results["concrete"][0],
-			"grip: concrete holds a %.2f g turn" % results["concrete"][1])
-	_check(results["steel"][0],
-			"grip: steel slides in the same %.2f g turn" % results["steel"][1])
+	_check(not slid["concrete"] and not slid["steel"],
+			"grip: full stick holds on concrete (%.0f° lean) and on steel (%.0f°)" % [leans["concrete"], leans["steel"]])
+	_check(leans["steel"] < leans["concrete"] * 0.5, "grip: steel leans far less than concrete")
+	_check(slid["turns to steel"], "grip: carving onto steel slides")
 	plate.queue_free()
 
 
