@@ -1,0 +1,9 @@
+# Normalize text files, keep Godot's text formats diffable
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.glb binary
+*.wav binary
+*.ogg binary

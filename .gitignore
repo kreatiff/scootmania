@@ -1,0 +1,8 @@
+# Godot 4 caches and imports
+.godot/
+/android/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.tmp

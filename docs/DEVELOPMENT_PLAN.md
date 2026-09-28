@@ -69,7 +69,7 @@ piece of engineering in the project.
 ## 3. Architecture
 
 ### Engine settings
-- Godot 4.x, latest stable, version pinned in `project.godot`. It needs
+- Godot 4.7 (latest stable at the time of writing), version pinned in `project.godot`. It needs
   Jolt: in 4.4+ it's built in; choose it under
   *Project Settings → Physics → 3D → Physics Engine* if it isn't the default.
 - **Physics tick: 120 Hz** to start (`physics/common/physics_ticks_per_second`),
@@ -96,8 +96,8 @@ scootmania/
 ├── input/
 │   └── rider_input.gd      # gamepad → normalised intent (lean, stance, brake)
 └── debug/
-    ├── force_draw.gd       # debug lines for forces and velocities
-    ├── tuning_panel.tscn   # live sliders bound to scooter_tuning.tres
+    ├── debug_draw.gd       # debug lines for forces and velocities
+    ├── tuning_panel.gd   # live sliders bound to scooter_tuning.tres
     └── telemetry.gd        # graphs: speed, slip, suspension, energy
 ```
 
@@ -142,17 +142,17 @@ takes longer than expected, so treat these as optimistic.
 
 ### Phase 0 — Setup & debug tooling (S)
 **Goal:** a project that runs, reads the gamepad and can show its internals.
-- [ ] Install Godot 4.x. Create the project and select Jolt, a 120 Hz tick
+- [x] Install Godot 4.x. Create the project and select Jolt, a 120 Hz tick
       and physics interpolation.
-- [ ] `.gitignore` for `.godot/` and import caches. Add `.gitattributes`
+- [x] `.gitignore` for `.godot/` and import caches. Add `.gitattributes`
       for binary assets (Git LFS later if assets grow).
-- [ ] Input map for all actions in §4, with a deadzone on the sticks.
-- [ ] `rider_input.gd`: gamepad → intent. On-screen display of the raw and
+- [x] Input map for all actions in §4, with a deadzone on the sticks.
+- [x] `rider_input.gd`: gamepad → intent. On-screen display of the raw and
       processed values.
-- [ ] `force_draw.gd`: a helper for drawing arrows, lines and points in 3D
+- [x] `debug_draw.gd`: a helper for drawing arrows, lines and points in 3D
       each frame.
-- [ ] Tuning panel skeleton: sliders generated from the tuning Resource.
-- [ ] Input record/replay (intent stream → file → playback).
+- [x] Tuning panel skeleton: sliders generated from the tuning Resource.
+- [x] Input record/replay (intent stream → file → playback).
 
 **Exit criteria:** moving the sticks updates the on-screen intent values
 smoothly. A recorded input file plays back exactly.
