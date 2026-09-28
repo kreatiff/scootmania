@@ -48,26 +48,35 @@ layer 2 ("grindable").
 | Manual pad | 0.3 m tall, 4 m long, steel edges |
 | Rail | 0.35 m tall, 50 mm round |
 
-## The scooter
+## The scooter and rider
 
-One rigid body: a 4 kg scooter plus, for now, a 70 kg rigid "ballast"
-rider (the see-through capsule). Two sphere-cast wheels apply all ground
-forces: a stiff sprung compliance, rolling resistance, a rear-only brake
-and sideways grip that slides past the surface's friction (concrete grips
-about three times harder than steel).
+Two physics bodies, split the way a real body splits:
+- **Scooter** (15 kg): the scooter plus the rider's shins, which move with
+  the deck. Two sphere-cast wheels apply all ground forces: a stiff sprung
+  compliance, rolling resistance, a rear-only brake and sideways grip that
+  slides past the surface's friction (concrete grips about three times
+  harder than steel).
+- **Rider** (59 kg, the blue capsule): hips, torso, arms. It rides on
+  **legs** (a spring the right stick lengthens or shortens) and is held
+  over the deck by the **hips**. On ramps, the legs soak up the transition
+  while the scooter follows the ramp.
 
-**Falling over:** after 1.5 s tipped past 60°, the scooter stands itself
-up where it came to rest (the delay is a slider; 0 turns it off). Tap
-Start / R to stand up at once, or hold it to go back to the spawn point.
+**Lean steers, with countersteering.** The left stick sets how far you
+lean. To lean in, the bars flick the other way for a moment, then steer
+into the turn to balance the lean, the way a real rider balances a bike
+or scooter. At walking pace it steers directly, and a "foot down" assist
+keeps you upright when nearly stopped.
 
-**Lean steers.** The left stick sets how far you lean. The front wheel then
-steers to whatever angle balances that lean at your speed, the way a
-bike's front wheel falls into a lean. At walking pace it steers directly.
+**Falling over:** tipped past 60°, the rider lets go. After 1.5 s the
+scooter stands itself up where it came to rest (the delay is a slider;
+0 turns it off). Tap Start / R to stand up at once, or hold it to go back
+to the spawn point.
+
 All values are sliders in the tuning panel (Tab / Back).
 
 Debug lines on the scooter: green = wheel load, orange = grip force (red
-when sliding), cyan = rolling direction, yellow cross = centre of mass,
-white = velocity.
+when sliding), cyan = rolling direction, yellow cross = scooter centre of
+mass, red cross = combined centre of mass, white = velocity.
 
 ## Debug tools
 
@@ -87,10 +96,10 @@ white = velocity.
 ## Tests
 
 ```sh
-godot --headless --fixed-fps 120 --path . res://tests/test_runner.tscn
+godot --headless --fixed-fps 240 --path . res://tests/test_runner.tscn
 ```
 
-`--fixed-fps 120` runs one physics tick per frame as fast as possible
+`--fixed-fps 240` runs one physics tick per frame as fast as possible
 instead of in real time. Exits with 0 on success. It includes:
 - an end-to-end check that a recorded replay drives a rigid body to the
   *identical* final transform;
@@ -98,6 +107,7 @@ instead of in real time. Exits with 0 on success. It includes:
   compares each hit with the height the prop's own profile predicts,
   including steel versus concrete;
 - scooter physics checked against hand-calculated values: statics at rest,
-  coast distance, an energy audit down the bank, bicycle-model steering,
-  and grip on concrete versus steel. "note" lines report criteria that
+  coast distance, energy audits (bank, kicker) covering both bodies and the
+  rider's muscle work, the rear wheel staying planted on the kicker,
+  bicycle-model steering, grip on concrete versus steel, and recovery. "note" lines report criteria that
   belong to a later phase.

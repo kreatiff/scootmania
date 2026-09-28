@@ -59,7 +59,7 @@ func setup(body: RigidBody3D, visual_mesh: Mesh, visual_material: Material) -> v
 
 
 ## Computes and applies this wheel's forces to `body` for one tick.
-func simulate(body: RigidBody3D, tuning: ScooterTuning, delta: float) -> void:
+func simulate(body: Scooter, tuning: ScooterTuning, delta: float) -> void:
 	var radius := tuning.wheel_radius
 	var travel := tuning.wheel_travel
 	var up := body.global_basis.y
@@ -89,6 +89,7 @@ func simulate(body: RigidBody3D, tuning: ScooterTuning, delta: float) -> void:
 	var com := body.global_transform * body.center_of_mass
 	var r := contact_point - com
 	var v := body.linear_velocity + body.angular_velocity.cross(r)
+	var inv_inertia := body.get_inverse_inertia_tensor()
 
 	# 1. Normal force: spring + damper, with a stiff bump stop near the end.
 	var x := maxf(compression, 0.0)
@@ -107,14 +108,23 @@ func simulate(body: RigidBody3D, tuning: ScooterTuning, delta: float) -> void:
 	rolling_dir = (forward - contact_normal * forward.dot(contact_normal)).normalized()
 	var lateral_dir := contact_normal.cross(rolling_dir).normalized()
 	rolling_speed = v.dot(rolling_dir)
-	var lateral_speed := v.dot(lateral_dir)
+
+	# Contact velocity at the end of this tick from every force already
+	# applied (gravity, rider, push, the other wheel) plus this wheel's own
+	# normal force. Cancelling that, instead of the current velocity, keeps
+	# the wheel from slipping a tick behind on a light body.
+	var force := body.pending_force + contact_normal * normal_force
+	var torque := body.pending_torque + r.cross(contact_normal * normal_force)
+	var v_next := v + (force / body.mass + (inv_inertia * torque).cross(r)) * delta
+	var lateral_speed := v_next.dot(lateral_dir)
+	var predicted_rolling := v_next.dot(rolling_dir)
 
 	# 3. Friction demand: cancel sideways slip; resist rolling only by
 	#    rolling resistance and brake. Both act like static friction, so a
 	#    stopped scooter doesn't creep.
 	var relax := tuning.friction_relax
 	var lat_demand := -lateral_speed * _effective_mass(body, r, lateral_dir) / delta * relax
-	var roll_demand := -rolling_speed * _effective_mass(body, r, rolling_dir) / delta * relax
+	var roll_demand := -predicted_rolling * _effective_mass(body, r, rolling_dir) / delta * relax
 	var roll_limit := tuning.rolling_resistance * normal_force
 	if not is_front:
 		roll_limit += brake * tuning.brake_mu * normal_force
@@ -133,7 +143,7 @@ func simulate(body: RigidBody3D, tuning: ScooterTuning, delta: float) -> void:
 
 	tangential_force = rolling_dir * demand.x + lateral_dir * demand.y
 	var total := contact_normal * normal_force + tangential_force
-	body.apply_force(total, contact_point - body.global_position)
+	body.add_tracked_force(total, contact_point)
 	work_done += total.dot(v) * delta
 	_update_visual(compression, delta)
 

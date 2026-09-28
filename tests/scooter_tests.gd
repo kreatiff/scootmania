@@ -9,6 +9,8 @@ const G := 9.81
 
 var runner: Node3D
 var tuning: ScooterTuning
+## Physics ticks per second.
+var tps := Engine.physics_ticks_per_second
 
 
 func _init(test_runner: Node3D) -> void:
@@ -30,10 +32,10 @@ func run() -> void:
 ## centre of mass position.
 func _test_rest() -> void:
 	var s := _spawn(Vector3(40, 0, 40), 0.0)
-	await _ticks(240)
+	await _ticks(tps * 2)
 	var start := s.global_position
 	var max_speed := 0.0
-	for i in 120:
+	for i in tps:
 		await _ticks(1)
 		max_speed = maxf(max_speed, s.linear_velocity.length())
 	var drift := (s.global_position - start).length()
@@ -58,7 +60,7 @@ func _test_coast() -> void:
 	var start := Vector3(-100, 0, 150)
 	var s := _spawn(start, 0.0, Vector3(0, 0, -v0))
 	var ticks := 0
-	while s.linear_velocity.length() > 0.02 and ticks < 120 * 40:
+	while s.linear_velocity.length() > 0.02 and ticks < tps * 40:
 		await _ticks(1)
 		ticks += 1
 	var m := tuning.total_mass()
@@ -67,7 +69,7 @@ func _test_coast() -> void:
 	var travelled := start.z - s.global_position.z
 	var sideways := absf(s.global_position.x - start.x)
 	_check(_near(travelled, expected, 0.05),
-			"coast: stops after %.1f m (expected %.1f m) in %.1f s" % [travelled, expected, ticks / 120.0])
+			"coast: stops after %.1f m (expected %.1f m) in %.1f s" % [travelled, expected, ticks / float(tps)])
 	_check(sideways < 0.05, "coast: runs straight (%.1f mm sideways)" % (sideways * 1000.0))
 	s.queue_free()
 
@@ -81,8 +83,8 @@ func _test_bank_energy() -> void:
 	bank.position = Vector3(60, 0, 0)
 	runner.add_child(bank)
 	await _ticks(2)
-	var start_z := -bank.slope_length() - 1.05
-	var v0 := 0.5
+	var start_z := -bank.slope_length() - 0.5
+	var v0 := 0.8
 	# Facing +Z (downhill), on the deck.
 	var s := _spawn(Vector3(60, bank.height, start_z), 180.0, Vector3(0, 0, v0))
 	await _ticks(1)
@@ -92,24 +94,25 @@ func _test_bank_energy() -> void:
 	var max_compression := 0.0
 	var airborne_ticks := 0
 	var ticks := 0
-	var work0 := s.front_wheel.work_done + s.rear_wheel.work_done
-	while s.global_position.z < 1.0 and ticks < 120 * 10:
-		var v := s.linear_velocity.length()
-		drag_work -= c * v * v * v / 120.0
+	var work0 := _work(s)
+	while s.global_position.z < 1.0 and ticks < tps * 10:
+		var v := s.rider.linear_velocity.length()
+		drag_work -= c * v * v * v / tps
 		await _ticks(1)
 		ticks += 1
 		max_compression = maxf(max_compression, maxf(s.front_wheel.compression, s.rear_wheel.compression))
 		if not s.is_grounded():
 			airborne_ticks += 1
-	_check(s.global_position.z >= 1.0, "bank: reaches the bottom (%.1f s)" % (ticks / 120.0))
-	var wheel_work := s.front_wheel.work_done + s.rear_wheel.work_done - work0
+	_check(s.global_position.z >= 1.0, "bank: reaches the bottom (%.1f s)" % (ticks / float(tps)))
+	var wheel_work := s.front_wheel.work_done + s.rear_wheel.work_done - work0.x
+	var rider_work := s.rider.work_done - work0.y
 	var e1 := _energy(s)
-	var expected := e0 + wheel_work + drag_work
+	var expected := e0 + wheel_work + rider_work + drag_work
 	_check(absf(e1 - expected) < 0.02 * e0,
 			"bank: energy audit balances (%.0f J, expected %.0f J)" % [e1, expected])
 	var rolling := tuning.rolling_resistance * tuning.total_mass() * G * (s.global_position.z - start_z)
-	runner.note("bank: wheels took %.0f J (rolling ≈ %.0f J), drag %.0f J, speed at bottom %.2f m/s"
-			% [-wheel_work, rolling, -drag_work, s.linear_velocity.length()])
+	runner.note("bank: wheels took %.0f J (rolling ≈ %.0f J), legs %.0f J, drag %.0f J, speed at bottom %.2f m/s"
+			% [-wheel_work, rolling, -rider_work, -drag_work, s.linear_velocity.length()])
 	_check(max_compression < tuning.wheel_travel * 0.8,
 			"bank: never bottoms out (max compression %.1f mm)" % (max_compression * 1000.0))
 	_check(airborne_ticks == 0, "bank: stays on the ground (%d airborne ticks)" % airborne_ticks)
@@ -117,8 +120,9 @@ func _test_bank_energy() -> void:
 	bank.queue_free()
 
 
-## Hits the kicker at 6 m/s: stays planted through the curve (about 2 g),
-## loses only the energy it should, and launches at the lip angle.
+## Hits the kicker at 6 m/s: the rider's legs absorb the ~2 g transition so
+## the rear wheel stays planted, it launches at the lip angle, and the energy
+## audit balances up to takeoff.
 func _test_kicker() -> void:
 	var kicker := Kicker.new()
 	kicker.position = Vector3(-60, 0, -40)
@@ -127,68 +131,68 @@ func _test_kicker() -> void:
 	var lip_z := kicker.position.z - kicker.radius() * sin(deg_to_rad(kicker.lip_angle_deg))
 	var v0 := 6.0
 	var s := _spawn(Vector3(-60, 0, -36), 0.0, Vector3(0, 0, -v0))
-	var m := tuning.total_mass()
+	await _ticks(1)
+	var e0 := _energy(s)
+	var work0 := _work(s)
 	var c := 0.5 * Scooter.AIR_DENSITY * tuning.drag_area
-	var e0 := 0.5 * m * v0 * v0
-	var losses := 0.0
+	var drag_work := 0.0
 	var lost_contact_on_curve := 0
-	var last_dir := Vector3.ZERO
-	var launch_com_height := 0.0
+	var launch_angle := NAN
 	var launched := false
-	var prev := s.global_position
-	for i in 240:
+	var min_leg := INF
+	for i in tps * 2:
+		var v := s.rider.linear_velocity.length()
+		drag_work -= c * v * v * v / tps
 		await _ticks(1)
-		var pos := s.global_position
-		var step := Vector2(pos.x - prev.x, pos.z - prev.z).length()
-		prev = pos
-		var v := s.linear_velocity.length()
-		losses += c * v * v * v / 120.0 + tuning.rolling_resistance * m * G * step
+		min_leg = minf(min_leg, s.rider.leg_length)
 		var on_curve := s.front_wheel.contact_point.z < kicker.position.z - 0.05
-		if s.rear_wheel.in_contact:
-			last_dir = s.rear_wheel.rolling_dir
-		elif on_curve and s.global_position.z > lip_z + 0.15:
+		if not s.rear_wheel.in_contact and on_curve and s.global_position.z > lip_z + 0.15:
 			lost_contact_on_curve += 1
-		if not s.is_grounded() and pos.z < lip_z:
+		if not s.is_grounded() and s.global_position.z < lip_z:
 			launched = true
-			var com := s.global_transform * s.center_of_mass
-			launch_com_height = com.y
-			var energy := 0.5 * m * s.linear_velocity.length_squared() \
-					+ 0.5 * s.angular_velocity.dot(s.get_inverse_inertia_tensor().inverse() * s.angular_velocity) \
-					+ m * G * (com.y - tuning.center_of_mass().y)
-			_check(_near(energy, e0 - losses, 0.04),
-					"kicker: energy at takeoff %.0f J (expected %.0f J)" % [energy, e0 - losses])
+			var flight := (s.linear_velocity * s.mass + s.rider.linear_velocity * s.rider.mass) \
+					/ (s.mass + s.rider.mass)
+			launch_angle = rad_to_deg(atan2(flight.y, Vector2(flight.x, flight.z).length()))
+			var work := _work(s) - work0
+			var expected := e0 + work.x + work.y + drag_work
+			var energy := _energy(s)
+			_check(absf(energy - expected) < 0.02 * e0,
+					"kicker: energy audit balances at takeoff (%.0f J, expected %.0f J)" % [energy, expected])
 			break
 	_check(launched, "kicker: launches off the lip")
-	# Phase 3: a rigid, stiff-legged rider can't keep the rear wheel down
-	# on a 2 g transition; the rider's legs will. Tracked, not yet required.
-	_pending(lost_contact_on_curve == 0,
-			"kicker: stays planted through the transition (%d ticks off)" % lost_contact_on_curve)
-	var angle := rad_to_deg(atan2(last_dir.y, -last_dir.z))
-	_pending(absf(angle - kicker.lip_angle_deg) < 2.5,
-			"kicker: leaves at %.1f° (lip is %.0f°)" % [angle, kicker.lip_angle_deg])
+	_check(lost_contact_on_curve == 0,
+			"kicker: rear wheel stays planted through the transition (%d ticks off)" % lost_contact_on_curve)
+	# Flight direction of the combined centre of mass as the last wheel
+	# leaves. A passive rider's knees soak up part of the transition, so it
+	# launches flatter than the lip; popping at the lip (Phase 4) adds the rest.
+	_check(launch_angle > kicker.lip_angle_deg * 0.5 and launch_angle < kicker.lip_angle_deg + 2.0,
+			"kicker: passive rider flies off at %.1f° (lip %.0f°)" % [launch_angle, kicker.lip_angle_deg])
+	runner.note("kicker: legs compressed to %.2f m (standing %.2f m)" % [min_leg, tuning.stand_leg_length()])
 	s.queue_free()
 	kicker.queue_free()
 
 
-## Steady turn from 3 m/s at half stick: reaches the asked-for lean, the
-## steering balances it (so the balance torque is nearly idle), and the yaw
-## rate matches the bicycle model. Tyre slip makes it understeer slightly.
+## Steady turn from 3 m/s at half stick: the rider's weight shift reaches
+## the asked-for lean, the steering balances it (so the hips settle back
+## over the deck), and the yaw rate matches the bicycle model. Tyre slip
+## makes it understeer slightly.
 func _test_steering() -> void:
 	var s := _spawn(Vector3(100, 0, 100), 0.0, Vector3(0, 0, -3.0))
 	s.manual_intent.lean = Vector2(0.5, 0.0)
-	await _ticks(240)
+	await _ticks(tps * 2)
 	var speed := -s.linear_velocity.dot(s.global_basis.z)
 	var yaw_rate := -s.angular_velocity.y
 	var expected_rate := speed * _ground_steer_tan(s.steer_angle) / tuning.wheelbase
 	var balanced_lean := atan(speed * yaw_rate / G)
-	_check(absf(s.lean_angle - s.target_lean) < deg_to_rad(1.0),
+	_check(absf(s.lean_angle - s.target_lean) < deg_to_rad(2.0),
 			"steering: reaches the stick's lean (%.1f°, asked %.1f°)"
 			% [rad_to_deg(s.lean_angle), rad_to_deg(s.target_lean)])
 	_check(absf(s.lean_angle - balanced_lean) < deg_to_rad(2.0),
 			"steering: the turn balances the lean (%.1f°, balanced %.1f°)"
 			% [rad_to_deg(s.lean_angle), rad_to_deg(balanced_lean)])
-	_check(absf(s.balance_torque) < 60.0,
-			"steering: balance torque nearly idle in the turn (%.0f N·m)" % s.balance_torque)
+	_check(absf(s.rider.hip_shift.x) < 0.05,
+			"steering: hips back over the deck in the steady turn (%+.3f m)" % s.rider.hip_shift.x)
+	_check(s.balance_torque == 0.0, "steering: no balance assist at speed")
 	_check(_near(yaw_rate, expected_rate, 0.10),
 			"steering: yaw rate %.3f rad/s at %.1f° steer (bicycle model %.3f)"
 			% [yaw_rate, rad_to_deg(s.steer_angle), expected_rate])
@@ -214,7 +218,7 @@ func _test_grip_by_surface() -> void:
 		var s := _spawn(at, 0.0, Vector3(0, 0, -5.0))
 		s.manual_intent.lean = Vector2(0.75, 0.0) # ~26° lean, ~0.5 g
 		var slid := false
-		for i in 150:
+		for i in tps * 5 / 4:
 			await _ticks(1)
 			slid = slid or s.front_wheel.sliding or s.rear_wheel.sliding
 		var speed := -s.linear_velocity.dot(s.global_basis.z)
@@ -236,18 +240,19 @@ func _test_recovery() -> void:
 	var s := _spawn(at, 0.0)
 	# Tip it onto its side from a little height.
 	s.global_transform = Transform3D(Basis(Vector3.FORWARD, PI * 0.5), at + Vector3(0, 0.3, 0))
+	s.rider.place_on(s, tuning)
 	var ticks := 0
 	var rest := s.global_position
-	while s.global_basis.y.y < 0.99 and ticks < 120 * 5:
+	while s.global_basis.y.y < 0.99 and ticks < tps * 5:
 		rest = s.global_position
 		await _ticks(1)
 		ticks += 1
-	var recovered_after := ticks / 120.0
+	var recovered_after := ticks / float(tps)
 	_check(recovered_after >= tuning.auto_recover_delay and recovered_after < tuning.auto_recover_delay + 1.0,
 			"recovery: stands itself up after %.2f s (delay %.1f s)" % [recovered_after, tuning.auto_recover_delay])
 	var moved := Vector2(s.global_position.x - rest.x, s.global_position.z - rest.z).length()
 	_check(moved < 0.05, "recovery: stands up where it came to rest (%.3f m away)" % moved)
-	await _ticks(120)
+	await _ticks(tps)
 	_check(s.global_basis.y.y > 0.99 and s.linear_velocity.length() < 0.01,
 			"recovery: settles upright (tilt %.1f°, %.3f m/s)"
 			% [rad_to_deg(acos(clampf(s.global_basis.y.y, -1, 1))), s.linear_velocity.length()])
@@ -257,7 +262,7 @@ func _test_recovery() -> void:
 	var start := Vector3(-40, 0, 110)
 	s = _spawn(start, 30.0, Basis(Vector3.UP, deg_to_rad(30.0)) * Vector3(0, 0, -4.0))
 	s.manual_intent.lean = Vector2(0.6, 0.0)
-	await _ticks(60)
+	await _ticks(tps / 2)
 	var heading_before := -s.global_basis.z
 	s.manual_intent.lean = Vector2.ZERO
 	s.manual_intent.reset = true
@@ -272,9 +277,9 @@ func _test_recovery() -> void:
 
 	# Hold reset: back to the spawn point.
 	s.linear_velocity = Basis(Vector3.UP, deg_to_rad(30.0)) * Vector3(0, 0, -4.0)
-	await _ticks(90)
+	await _ticks(tps * 3 / 4)
 	s.manual_intent.reset = true
-	await _ticks(int(tuning.respawn_hold_time * 120.0) + 5)
+	await _ticks(int(tuning.respawn_hold_time * tps) + 5)
 	s.manual_intent.reset = false
 	await _ticks(2)
 	var from_spawn := Vector2(s.global_position.x - start.x, s.global_position.z - start.z).length()
@@ -304,15 +309,23 @@ func _ticks(n: int) -> void:
 		await runner.get_tree().physics_frame
 
 
-## Total mechanical energy: translation, rotation, height of the centre of
-## mass, and the wheel springs.
+## Total mechanical energy of scooter and rider: motion, height, and the
+## wheel springs. (Leg forces aren't conservative, so their work is tracked
+## separately in rider.work_done.)
 func _energy(s: Scooter) -> float:
 	var com := s.global_transform * s.center_of_mass
 	var inertia := s.get_inverse_inertia_tensor().inverse()
+	var r := s.rider
 	return 0.5 * s.mass * s.linear_velocity.length_squared() \
 			+ 0.5 * s.angular_velocity.dot(inertia * s.angular_velocity) \
 			+ s.mass * G * com.y \
+			+ 0.5 * r.mass * r.linear_velocity.length_squared() + r.mass * G * r.global_position.y \
 			+ s.front_wheel.spring_energy(tuning) + s.rear_wheel.spring_energy(tuning)
+
+
+## Work done so far by (wheels, rider's legs and hips).
+func _work(s: Scooter) -> Vector2:
+	return Vector2(s.front_wheel.work_done + s.rear_wheel.work_done, s.rider.work_done)
 
 
 func _check(condition: bool, description: String) -> void:

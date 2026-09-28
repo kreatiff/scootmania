@@ -1,10 +1,12 @@
 class_name Scooter
 extends RigidBody3D
-## The scooter and (for now) its rider as rigid ballast, as one rigid body.
+## The scooter, carrying the rider's shins, as one rigid body; the rider's
+## upper body is a second body on sprung legs (see Rider).
 ##
 ## Frame: origin on the ground midway between the wheels, forward -Z, up +Y,
 ## right +X. The wheels apply all ground forces (see ScooterWheel). This
-## script adds lean and steering, push, brake and air drag.
+## script adds lean and steering, push, brake and air drag, and runs the
+## rider.
 ##
 ## Lean steers, as on a real scooter or bike: the left stick sets the lean
 ## you want, and each tick the front wheel steers to whatever angle balances
@@ -13,9 +15,10 @@ extends RigidBody3D
 ## outside of the turn, and a first prototype that steered directly did
 ## exactly that.
 ##
-## Phase 2 stand-in, replaced in Phase 3: the rider is rigid ballast, and a
-## balance torque moves the lean toward the target instead of the rider
-## shifting their weight.
+## "Lean" means the whole system's lean: where the combined centre of mass
+## sits over the wheels' contact line. The rider changes it by shifting
+## their hips. Near standstill, where nobody can balance by steering, a
+## balance torque stands in for putting a foot down.
 
 ## Scooter collision sits on its own layer and only hits the world.
 const LAYER_SCOOTER := 4
@@ -32,17 +35,26 @@ var steer_angle := 0.0
 ## Positive = leaning right, radians.
 var lean_angle := 0.0
 var target_lean := 0.0
+## Rate of change of lean_angle, rad/s (smoothed).
+var lean_rate := 0.0
 ## Last balance torque applied, N·m (+ leans right). For telemetry and tests.
 var balance_torque := 0.0
 ## How long the scooter has been tipped past fallen_angle_deg, s.
 var fallen_time := 0.0
 
+## Sum of forces (and their torque about the centre of mass) applied to this
+## body so far in the current tick, gravity included.
+var pending_force := Vector3.ZERO
+var pending_torque := Vector3.ZERO
+
 var front_wheel := ScooterWheel.new()
 var rear_wheel := ScooterWheel.new()
+var rider := Rider.new()
 
 var _push_time_left := 0.0
 var _kick_was_down := false
 var _steering_visual := Node3D.new()
+var _leg_visual := MeshInstance3D.new()
 var _spawn_transform := Transform3D()
 var _reset_held_time := 0.0
 var _respawned_this_hold := false
@@ -67,6 +79,10 @@ func _ready() -> void:
 	_apply_mass_properties()
 	_build()
 	_spawn_transform = global_transform
+	rider.name = "Rider"
+	add_child(rider)
+	_build_rider_visuals()
+	rider.place_on(self, tuning)
 
 
 func _physics_process(delta: float) -> void:
@@ -80,18 +96,38 @@ func _physics_process(delta: float) -> void:
 	_update_steering(intent, speed, delta)
 	front_wheel.steer_angle = steer_angle
 	rear_wheel.brake = intent.brake
-	front_wheel.simulate(self, tuning, delta)
-	rear_wheel.simulate(self, tuning, delta)
-	var grounded := front_wheel.in_contact or rear_wheel.in_contact
 
+	# Every force on the scooter body this tick is tallied (gravity first),
+	# so the wheels can predict the slip they must cancel. The wheels go
+	# last because they react to everything else.
+	pending_force = Vector3.DOWN * GRAVITY * mass * gravity_scale
+	pending_torque = Vector3.ZERO
+	var grounded := is_grounded() # from last tick's contacts
+	if is_fallen():
+		rider.bailed = true # let go; stood back up by recovery
+	rider.simulate(self, tuning, intent, lean_angle, lean_rate, target_lean)
 	_apply_push(intent, speed, grounded, delta)
 	_apply_drag()
 	if grounded:
-		_apply_balance_torque()
+		_apply_balance_torque(speed)
+	front_wheel.simulate(self, tuning, delta)
+	rear_wheel.simulate(self, tuning, delta)
 
 	_steering_visual.rotation = Vector3.ZERO
 	_steering_visual.rotate_object_local(tuning.headtube_axis().normalized(), -steer_angle)
 	_draw_debug(speed)
+
+
+## Applies a force at a world point and adds it to this tick's tally.
+func add_tracked_force(force: Vector3, point: Vector3) -> void:
+	apply_force(force, point - global_position)
+	pending_force += force
+	pending_torque += (point - global_transform * center_of_mass).cross(force)
+
+
+func add_tracked_torque(torque: Vector3) -> void:
+	apply_torque(torque)
+	pending_torque += torque
 
 
 func is_grounded() -> bool:
@@ -200,12 +236,14 @@ func _place(ground: Vector3, up: Vector3, heading: Vector3) -> void:
 	steer_angle = 0.0
 	target_lean = 0.0
 	lean_angle = 0.0
+	lean_rate = 0.0
 	fallen_time = 0.0
 	_push_time_left = 0.0
 	front_wheel.sliding = false
 	rear_wheel.sliding = false
 	DebugDraw.watches.erase("fallen")
 	reset_physics_interpolation()
+	rider.place_on(self, tuning)
 
 
 static func _flat(v: Vector3) -> Vector3:
@@ -214,8 +252,8 @@ static func _flat(v: Vector3) -> Vector3:
 
 
 func _apply_mass_properties() -> void:
-	mass = tuning.total_mass()
-	center_of_mass = tuning.center_of_mass()
+	mass = tuning.unsprung_mass()
+	center_of_mass = tuning.scooter_center_of_mass()
 	inertia = Vector3(tuning.inertia_roll_pitch, tuning.inertia_yaw, tuning.inertia_roll_pitch)
 	var half := tuning.wheelbase * 0.5
 	front_wheel.position = Vector3(0, tuning.wheel_radius, -half)
@@ -223,22 +261,34 @@ func _apply_mass_properties() -> void:
 
 
 func _update_lean(intent: RiderIntent, delta: float) -> void:
-	lean_angle = asin(clampf(-global_basis.x.y, -1.0, 1.0))
+	var previous := lean_angle
+	lean_angle = system_lean()
+	lean_rate = lerpf(lean_rate, (lean_angle - previous) / delta, 0.3)
 	var wanted := intent.lean.x * deg_to_rad(tuning.max_lean_deg)
 	target_lean = move_toward(target_lean, wanted, deg_to_rad(tuning.lean_rate_deg) * delta)
 
 
-## Steer to balance the current lean: in a steady turn, lateral grip must
-## supply m·g·tan(lean), which for a bicycle-like wheelbase gives
-## tan(ground steer) = wheelbase · g · tan(lean) / v².
-## At walking pace that formula blows up, so it blends to steering directly
-## from the stick. The result is limited by speed and by steering rate.
+## Steering is how a rider balances and turns, as on a bike:
+## - Balance: steer so the turn's sideways acceleration holds up the current
+##   lean, a = g·tan(lean).
+## - Countersteer: to lean further right, briefly steer left so the wheels
+##   run out from under you, and the reverse. Plus damping on the lean rate.
+## The acceleration becomes a steering angle through the bicycle model,
+## tan(ground steer) = wheelbase · a / v². At walking pace that blows up, so
+## it blends to steering directly from the stick. The result is limited by
+## speed and by steering rate.
+##
+## Balancing is a stable loop: the lean error decays like a spring with
+## ω² ≈ g·countersteer_gain / height.
 func _update_steering(intent: RiderIntent, speed: float, delta: float) -> void:
 	var v := absf(speed)
 	var direct := intent.lean.x * deg_to_rad(tuning.max_steer_slow_deg)
 	var balance := 0.0
 	if v > 0.1:
-		var ground_tan := tuning.wheelbase * GRAVITY * tan(lean_angle) / (v * v)
+		var correction := tuning.countersteer_gain * (lean_angle - target_lean) \
+				+ tuning.countersteer_damping * lean_rate
+		var lateral := GRAVITY * (tan(lean_angle) + correction)
+		var ground_tan := tuning.wheelbase * lateral / (v * v)
 		balance = atan(ground_tan / sin(deg_to_rad(tuning.headtube_angle_deg)))
 	var blend := clampf(inverse_lerp(tuning.lean_steer_min_speed, tuning.lean_steer_full_speed, v), 0.0, 1.0)
 	var t := clampf(v / tuning.steer_fast_speed, 0.0, 1.0)
@@ -260,24 +310,51 @@ func _apply_push(intent: RiderIntent, speed: float, grounded: bool, delta: float
 	var normal := rear_wheel.contact_normal if rear_wheel.in_contact else Vector3.UP
 	var forward := -global_basis.z
 	forward = (forward - normal * forward.dot(normal)).normalized()
-	apply_central_force(forward * tuning.push_force)
+	add_tracked_force(forward * tuning.push_force, global_transform * center_of_mass)
 
 
+## Air drag acts on the rider, who is nearly all of the frontal area.
 func _apply_drag() -> void:
-	var v := linear_velocity
-	apply_central_force(-0.5 * AIR_DENSITY * tuning.drag_area * v.length() * v)
+	var v := rider.linear_velocity
+	rider.apply_central_force(-0.5 * AIR_DENSITY * tuning.drag_area * v.length() * v)
 
 
-## Moves the lean toward the target. Stands in for the rider shifting
-## their weight until Phase 3; in a steady turn it does almost nothing,
-## because the steering already balances the lean.
-func _apply_balance_torque() -> void:
-	var forward := -global_basis.z
-	var roll_rate := angular_velocity.dot(forward)
-	var torque := tuning.assist_stiffness * (target_lean - lean_angle) - tuning.assist_damping * roll_rate
+## Optional help on top of the rider's weight shift: full strength near
+## standstill (standing in for a foot put down), assist_strength at speed.
+## Like a foot on the ground, it's an outside force, applied sideways at
+## the rider's hips so it tips the whole system rather than just the deck.
+func _apply_balance_torque(speed: float) -> void:
+	var t := clampf(inverse_lerp(tuning.stand_assist_speed, tuning.stand_assist_speed * 2.0, absf(speed)), 0.0, 1.0)
+	var strength := lerpf(tuning.stand_assist, tuning.assist_strength, t)
+	var torque := tuning.assist_stiffness * (target_lean - lean_angle) - tuning.assist_damping * lean_rate
 	torque = clampf(torque, -tuning.max_balance_torque, tuning.max_balance_torque)
-	balance_torque = torque * tuning.assist_strength
-	apply_torque(forward * balance_torque)
+	balance_torque = torque * strength
+	var heading := _flat(-global_basis.z)
+	if heading == Vector3.ZERO or balance_torque == 0.0:
+		return
+	var height := maxf(rider.global_position.y - global_position.y, 0.3)
+	rider.apply_central_force(heading.cross(Vector3.UP) * balance_torque / height)
+
+
+## Lean of the whole system: the angle, seen along the direction of travel,
+## between vertical and the line from the wheels' contact line to the
+## combined centre of mass. + is leaning right.
+func system_lean() -> float:
+	var com := system_center_of_mass()
+	var base := global_position
+	if front_wheel.in_contact and rear_wheel.in_contact:
+		base = (front_wheel.contact_point + rear_wheel.contact_point) * 0.5
+	var heading := _flat(-global_basis.z)
+	if heading == Vector3.ZERO:
+		heading = Vector3.FORWARD
+	var right := heading.cross(Vector3.UP)
+	var d := com - base
+	return atan2(d.dot(right), d.dot(Vector3.UP))
+
+
+func system_center_of_mass() -> Vector3:
+	var own := global_transform * center_of_mass
+	return (own * mass + rider.global_position * rider.mass) / (mass + rider.mass)
 
 
 func _draw_debug(speed: float) -> void:
@@ -290,6 +367,9 @@ func _draw_debug(speed: float) -> void:
 	DebugDraw.watch("lean", "%+.1f° (target %+.1f°)   steer %+.1f°   balance %+.0f N·m"
 			% [rad_to_deg(lean_angle), rad_to_deg(target_lean), rad_to_deg(steer_angle), balance_torque])
 	DebugDraw.watch("wheels", "F %s   R %s" % [_wheel_text(front_wheel), _wheel_text(rear_wheel)])
+	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
+			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])
+	DebugDraw.point(system_center_of_mass(), Color.ORANGE_RED, 0.08)
 
 
 static func _wheel_text(wheel: ScooterWheel) -> String:
@@ -362,15 +442,39 @@ func _build() -> void:
 	front_wheel.setup(self, wheel_mesh, wheel_material)
 	rear_wheel.setup(self, wheel_mesh, wheel_material)
 
-	var ballast := CapsuleMesh.new()
-	ballast.radius = 0.18
-	ballast.height = 1.7
-	var ghost := StandardMaterial3D.new()
-	ghost.albedo_color = Color(0.4, 0.7, 1.0, 0.25)
-	ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ghost.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_add_mesh(self, ballast, ghost,
-			Transform3D(Basis(), Vector3(0, deck_center.y + 0.85, tuning.rider_com_offset)))
+
+
+## The rider's torso (on the rider body) and a leg from deck to hips,
+## redrawn every frame so you can see the knees work.
+func _build_rider_visuals() -> void:
+	var torso := CapsuleMesh.new()
+	torso.radius = 0.17
+	torso.height = 0.75
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.35, 0.6, 0.95)
+	skin.roughness = 0.8
+	_add_mesh(rider, torso, skin, Transform3D(Basis(), Vector3(0, 0.2, 0)))
+	var leg := CylinderMesh.new()
+	leg.top_radius = 0.06
+	leg.bottom_radius = 0.05
+	leg.height = 1.0
+	_leg_visual.mesh = leg
+	_leg_visual.material_override = skin
+	_leg_visual.top_level = true
+	_leg_visual.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	add_child(_leg_visual)
+
+
+func _process(_delta: float) -> void:
+	var feet := get_global_transform_interpolated() * Vector3(0, tuning.deck_top, tuning.rider_com_offset)
+	var hips := rider.get_global_transform_interpolated().origin
+	var along := hips - feet
+	var length := along.length()
+	if length < 0.01:
+		return
+	var y := along / length
+	var x := y.cross(Vector3.FORWARD if absf(y.z) < 0.9 else Vector3.RIGHT).normalized()
+	_leg_visual.global_transform = Transform3D(Basis(x, y * length, x.cross(y)), (feet + hips) * 0.5)
 
 
 func _add_collision(shape: Shape3D, xform: Transform3D) -> void:

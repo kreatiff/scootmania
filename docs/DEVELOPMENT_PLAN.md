@@ -72,8 +72,10 @@ piece of engineering in the project.
 - Godot 4.7 (latest stable at the time of writing), version pinned in `project.godot`. It needs
   Jolt: in 4.4+ it's built in; choose it under
   *Project Settings → Physics → 3D → Physics Engine* if it isn't the default.
-- **Physics tick: 120 Hz** to start (`physics/common/physics_ticks_per_second`),
-  going up to 240 Hz if tyre forces jitter. Rendering is decoupled from
+- **Physics tick: 240 Hz** (`physics/common/physics_ticks_per_second`).
+  It started at 120 Hz. Phase 3 made the scooter body light (the rider's
+  upper body became its own body), and stiff wheel springs on a light body
+  need the smaller step. Rendering is decoupled from
   physics, with physics interpolation turned on.
 - Forward+ renderer. Web export isn't a goal for the sandbox.
 
@@ -217,33 +219,46 @@ gives the ballast legs.
       lifts the whole mass before the body can pitch. Real riders absorb
       this with their knees. The test runs and reports it as pending.
 
-### Phase 3 — Rider mass, lean and balance (L)
+### Phase 3 — Rider mass, lean and balance (L) ✅
 **Goal:** a rideable scooter. This is the most important phase in the plan.
-- [ ] Rider model (inside `rider.gd`): a centre-of-mass point above the deck,
-      with a spring-damper leg along the rider's up axis. The leg can lean
-      sideways and fore/aft within limits.
-- [ ] Rider forces act on the scooter body where the feet are and where the
-      hands hold the bars. Combined centre of mass and inertia are updated
-      as the rider moves.
-- [x] **Lean → steer** (done in Phase 2): steering follows the lean.
-- [ ] **Rider weight shift replaces the balance torque**: the lean comes from
-      the rider moving their centre of mass, not a torque applied to the
-      body. The strength stays a slider, with 0 meaning full simulation.
-- [ ] Rider legs absorb transitions, so the rear wheel stays down on the
-      kicker (the pending Phase 2 test).
-- [ ] **Kick**: pressing A applies a foot-push force for a short time,
-      only when grounded and below a top kicking speed.
-- [ ] Simple visuals: a capsule rider that leans and compresses with the
-      simulation.
+
+*Change from the plan:* the rider isn't a point simulated inside the
+scooter. Phase 2 showed the tyres need a real physics body carrying most
+of the load, so the model is **two bodies** joined by forces we compute:
+the scooter plus the rider's shins (15 kg), and the rider's upper body
+(59 kg). This split is how a real body divides: shins move with the deck,
+everything above the knees rides on the legs.
+- [x] **Legs:** a spring-damper along the leg axis. Muscles carry body
+      weight, the right stick sets leg length (crouch / extend), and there
+      are joint limits. The leg axis follows the scooter's roll but stays
+      vertical in pitch, so the hips stay over the feet on ramps.
+- [x] **Hips:** hold the torso over the deck. Sideways, the reaction goes
+      into the scooter at hip height (the scooter rolls with the rider).
+      Fore/aft it goes through the feet (the scooter pitches freely).
+- [x] **Arms and ankles** damp the deck's pitch rate, so the deck doesn't
+      flop nose-down off a lip.
+- [x] **Lean → steer**, now with **countersteering**: to lean in, the bars
+      flick the other way first, then the steering balances the lean. This
+      replaced the balance torque. (Weight-shifting the hips was tried first:
+      with a light scooter, shoving the hips sideways kicks the scooter out
+      the other way and tips you over. It's a slider, off by default.)
+- [x] **Stand assist:** near standstill, where nobody balances by
+      steering, a sideways force stands in for putting a foot down.
+- [x] **Wheel tyres anticipate** every force on the scooter body this tick
+      (gravity, rider, push, other wheel), so a light body doesn't slip a
+      tick behind. This removed ~17% understeer.
+- [x] **Bail:** tipped past 60°, the rider lets go and falls as a free body
+      until recovery.
+- [x] Kick; visuals (torso capsule, a leg that visibly compresses).
 
 **Exit criteria:**
-- The kicker test's pending checks pass: the rear wheel stays planted
-  through the transition, and it leaves at the lip angle.
-- Riding laps around the park at kicking speed feels controlled.
-- Carving tight and wide turns is predictable.
-- With assist at 0, riding is *hard but possible*. With the default assist,
-  it's comfortable.
-- Braking hard with the rear-only brake behaves believably.
+- [x] The kicker's rear wheel stays planted through the transition
+      (automated), and the energy audits still balance with two bodies.
+- [x] Countersteered turns reach the asked-for lean; the turn balances it;
+      yaw rate matches the bicycle model.
+- [ ] Riding laps around the park feels controlled *(needs you, with a
+      controller)*.
+- [ ] Braking hard with the rear-only brake behaves believably *(same)*.
 
 ### Phase 4 — Compression, pop and pumping (M)
 **Goal:** the rider's legs add and remove energy, as they do in real life.

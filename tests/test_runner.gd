@@ -1,6 +1,6 @@
 extends Node3D
 ## Headless tests. Run from the project folder with:
-##   godot --headless --fixed-fps 120 --path . res://tests/test_runner.tscn
+##   godot --headless --fixed-fps 240 --path . res://tests/test_runner.tscn
 ## (--fixed-fps runs one physics tick per frame as fast as possible, instead
 ## of in real time.) Exits with code 0 when everything passes, 1 otherwise.
 ##
