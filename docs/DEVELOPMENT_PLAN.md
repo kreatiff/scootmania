@@ -14,10 +14,14 @@ listed at the end as out of scope for now.
 
 1. **Feel first, content later.** No art, menus, levels, scoring or audio
    until riding the sandbox is fun with placeholder shapes.
-2. **Simulate the physics, assist the balance.** Mass, momentum, suspension,
-   tyre grip, weight transfer and pumping are simulated for real. Keeping the
-   scooter upright and landing tolerance are *assists*, with strength sliders
-   that can go to zero.
+2. **Realistic riding, achievable tricks.** The split is deliberate:
+   - **Riding and the world are simulated for real:** mass, momentum,
+     suspension, tyre grip, weight transfer, pumping, and how you leave a
+     ramp. Keeping the scooter upright is an *assist* with a slider.
+   - **Tricks are designed like skate.:** a flick starts a trick, and the
+     trick then plays out reliably. The skill is in the *inputs and the
+     timing* (enough pop, enough airtime, landing straight), not in fighting
+     the simulation. When fun and realism conflict on a trick, fun wins.
 3. **Real units, real numbers.** Metres, kilograms, seconds. Start from
    measured values for a real scooter and rider, and tune from there.
 4. **Make everything visible.** Every force is drawn as a debug line, and
@@ -47,15 +51,18 @@ leg forces. So the rider can't be a decoration on top of a vehicle. The rider
 
 **Stability consequence:** joining a 70 kg body to a 4 kg body with a
 physics joint (a 17:1 mass ratio) makes iterative solvers jitter and explode.
-So the model is built in stages (see Phase 3):
+So the physics is **one rigid body for scooter and rider combined**. The
+rider is simulated *inside our own code* as a centre of mass on a sprung
+"leg" that can lean and compress, and it applies forces to the body. This is
+robust, and it's how most shipped riding games work.
 
-- **Early phases:** one rigid body for scooter and rider combined. The rider
-  is simulated *inside our own code* as a centre of mass on a sprung "leg"
-  that can lean and compress, and it applies forces to the body. This is
-  robust, and it's how most shipped riding games work.
-- **Later (Phase 7):** the scooter is split into **deck** and **bars+fork**
-  rigid bodies, joined by a hinge along the headtube. This is what makes
-  barspins and tailwhips *physical* rotations about the real axis.
+**Tricks don't need a second physics body.** During a tailwhip the 4 kg deck
+spins while the 70 kg rider barely moves, so the effect on the whole
+system's motion is negligible. Barspins and tailwhips are therefore
+*driven rotations* of the visual deck and bars about the **real headtube
+axis**, while the physics body keeps flying its true trajectory. It looks
+correct, it can be timed and tuned exactly, and it avoids the riskiest
+piece of engineering in the project.
 
 ---
 
@@ -239,17 +246,22 @@ gain on each pump.
 ### Phase 5 — Airs, landings and bails (M)
 **Goal:** leaving the ground, controlling the air, and landing or bailing.
 - [ ] Airborne detection (both wheels without contact for more than N ticks).
-- [ ] **Air control. There's a real decision to make here:** conservation of
-      angular momentum means a real rider can't start a spin in mid-air; they
-      only redistribute it (tuck to spin faster, extend to slow down).
-  - Realistic option: spin and flip are mostly set at takeoff (lean and
-    wind-up on the lip), and in the air you can only tuck or extend.
-  - Assisted option: a small amount of air torque, with a slider.
-  - Recommendation: build the realistic one first and add the assist slider
-    only if testing shows it's needed.
-- [ ] Landing evaluation: angle between the deck and the ground normal,
-      spread in wheel contact timing, and impact speed.
-      Clean / sketchy / bail thresholds are tuning values.
+- [ ] **Air control, skate.-style.** Physically, a rider can't start a spin
+      in mid-air (angular momentum is conserved). We keep the flavour of that
+      but favour playability:
+  - Takeoff matters: leaning and winding up on the lip sets most of the
+    spin and flip, which rewards good riding.
+  - The left stick adds a moderate amount of air torque on top, so you can
+    always correct and adjust. Its strength is a slider.
+- [ ] **Landing assist**: in the last fraction of a second before
+      touchdown, gently rotate the scooter toward the landing surface when
+      it's already close. It's skate.'s hidden helper and a big part of why
+      landings feel fair. Its strength and the maximum angle it can correct
+      are sliders.
+- [ ] Landing evaluation, *after* the assist: angle between the deck and
+      the ground normal, spread in wheel contact timing, and impact speed.
+      Clean / sketchy / bail thresholds are tuning values, with generous
+      defaults.
 - [ ] **Bail, stage 1**: when a bail is detected, slow motion for ~0.5 s,
       a camera cut, then respawn at the last safe spot.
 - [ ] Coping behaviour: the quarter pipe lip must launch you straight up
@@ -277,24 +289,30 @@ gain on each pump.
 **Exit criteria:** a full session of riding with no moment where the
 camera hides the landing or makes you feel sick.
 
-### Phase 7 — Two-body scooter and the first tricks (L)
-**Goal:** barspins and tailwhips as *physical* rotations.
-- [ ] Split the scooter into **deck** and **bars+fork+front wheel** rigid
-      bodies, joined by a hinge along the headtube axis.
-- [ ] Re-verify every Phase 2–6 exit criterion. The split *will* disturb
-      stability, so budget time for that.
-- [ ] Trick input: right stick flick gestures, read in the air.
-- [ ] **Barspin**: the rider's hands release and a spin impulse is applied
-      to the bar body. The hands re-catch when the bars come back into
-      alignment within a window.
-- [ ] **Tailwhip**: the rider holds the bars, the feet kick the deck, and
-      a spin impulse is applied to the deck body around the headtube axis.
-      The feet re-catch the deck within an alignment window.
-- [ ] A failed catch (misaligned at landing) → bail.
+### Phase 7 — First tricks (M)
+**Goal:** barspins and tailwhips that feel as achievable as skate.'s flip
+tricks.
+- [ ] Split the scooter *visuals* into deck and bars+fork+front wheel nodes,
+      pivoting about the real headtube axis. The physics body is unchanged.
+- [ ] **Flick recognition** on the right stick: direction + speed,
+      with generous tolerances (skate.'s flicks are forgiving). Show the
+      recognised gesture on the debug HUD so tolerances can be tuned.
+- [ ] **Trick playback**: once triggered, the part rotates 360° along a
+      tuned curve (quick start, smooth settle) over a fixed duration.
+      There's no mid-trick physics to fight.
+- [ ] **Barspin**: the bars rotate. **Tailwhip**: the deck rotates around
+      the headtube axis while the rider holds the bars.
+- [ ] **Where the skill is**: the trick needs airtime. If you land before
+      it finishes, you bail. So the skill is in the pop and the timing,
+      exactly like skate.
+- [ ] **Feedback**: a clear "too early / landed / bailed" read. Optional
+      slow-mo on the first land of a new trick.
+- [ ] Trick duration, flick tolerance and the "almost finished" grace
+      window are all sliders.
 
-**Exit criteria:** from the quarter pipe or kicker, a well-timed barspin
-and tailwhip can be landed. Mistimed ones fail in ways that look
-physically believable.
+**Exit criteria:** after a few minutes of practice, a new player can land a
+barspin and a tailwhip off the kicker. Failures read as *their* mistake
+(not enough air, bad landing), never as the game's.
 
 ---
 
@@ -318,9 +336,9 @@ physically believable.
 
 | Risk | Mitigation |
 |---|---|
-| Physics jitter or explosions from the rider/scooter mass ratio | Single-body model with an internal rider simulation until Phase 7. A higher tick rate if needed. |
+| Physics jitter or explosions from the rider/scooter mass ratio | Single-body model with an internal rider simulation. Tricks are visual-only rotations, so no second body is ever needed. A higher tick rate if needed. |
 | Wheels catching on coping or box edges | Sphere shape-casts, not raycasts. Test props specifically for this. |
-| "Realistic" turns out not to be fun | Every assist is a slider. Decide by playing, not by arguing. |
+| Realistic riding turns out not to be fun | Every assist is a slider. Decide by playing, not by arguing. Tricks are already on the fun side of the line. |
 | Tuning goes round in circles | Input replay plus committed tuning Resources. Keep a tuning log in `docs/`. |
 | Scope creep into art and content | §1 rule 1. Placeholder shapes until Phase 7 exits. |
 | Beginner stalls on a hard phase | Each phase has a playable exit. If stuck for over 2 weeks, simplify the model and move on. |
