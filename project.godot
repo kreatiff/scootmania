@@ -14,6 +14,11 @@ config/name="Scootmania"
 run/main_scene="res://scenes/sandbox.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
+[autoload]
+
+DebugDraw="*res://debug/debug_draw.gd"
+RiderInput="*res://input/rider_input.gd"
+
 [input]
 
 lean_left={
@@ -110,8 +115,3 @@ common/physics_ticks_per_second=120
 common/max_physics_steps_per_frame=12
 3d/physics_engine="Jolt Physics"
 common/physics_interpolation=true
-
-[autoload]
-
-DebugDraw="*res://debug/debug_draw.gd"
-RiderInput="*res://input/rider_input.gd"
