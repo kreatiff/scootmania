@@ -177,30 +177,45 @@ smoothly. A recorded input file plays back exactly.
 collider (checked with *Debug → Visible Collision Shapes*, and automatically
 by the ray-cast test in `tests/`).
 
-### Phase 2 — The rolling scooter, no rider (M)
+### Phase 2 — The rolling scooter (M) ✅
 **Goal:** a scooter-shaped rigid body that rolls, coasts and grips like
 solid PU wheels on concrete.
-- [ ] `RigidBody3D` for the scooter with real mass and inertia, and a
-      box-plus-bars placeholder mesh.
-- [ ] **Shape-cast wheels** (`ShapeCast3D` with a sphere, not a single ray)
-      so the wheels roll correctly over coping and box edges.
-- [ ] Wheel compliance: solid PU hardly compresses, so model it as a stiff,
-      heavily damped spring (a few mm of travel). This keeps contact stable.
-- [ ] Tyre model per wheel:
-  - [ ] Longitudinal: rolling resistance, and braking on the rear wheel only.
-  - [ ] Lateral: a grip force from slip velocity, with a peak and a drop-off
-        (a simplified curve, not full Pacejka). PU wheels grip hard, then
-        let go abruptly. That "slide" is a feature later.
-- [ ] Steering: the front wheel rotates about the **real headtube axis**
-      (~83°), not a vertical axis. This is what makes leaning cause steering.
-- [ ] A debug key gives it a push. Draw the suspension, grip and velocity
-      vectors.
 
-**Exit criteria:**
-- It rolls straight and coasts to a stop over a believable distance.
-- It sits on flat ground without jittering or creeping.
-- It rolls down the bank and speeds up correctly.
-- It rolls over the kicker without sticking to the ground or bouncing out.
+*Decision:* a riderless 4 kg scooter can't be tested realistically (it
+falls over, and every tyre force depends on the rider's weight), so Phase 2
+uses the full 74 kg system with the rider as **rigid ballast**. Phase 3
+gives the ballast legs.
+- [x] `RigidBody3D` with real mass, centre of mass and inertia (scooter +
+      ballast rider). Godot's default body damping turned off, because air
+      drag and rolling resistance are modelled explicitly.
+- [x] **Shape-cast wheels** (sphere, not a single ray). The cast's own hit
+      distance is quantised (~1.5 mm steps, which made the spring jitter), so
+      the exact distance is solved from the contact point and normal.
+- [x] Wheel compliance: a stiff, damped spring (~5 mm under a standing
+      rider) with a bump stop.
+- [x] Tyre model: rolling resistance, rear-only brake, lateral grip
+      that cancels sideways slip up to surface friction × load, then slides
+      at reduced grip until it regrips (hysteresis). Grip comes from the
+      surface: concrete 0.9, steel 0.3.
+- [x] Steering about the **real headtube axis** (83°).
+- [x] **Lean steers** (pulled forward from Phase 3): the stick sets the
+      target lean, and the front wheel steers to whatever balances the
+      current lean at the current speed. The first prototype steered
+      directly and threw the rider off the outside of every turn, which is
+      exactly what real physics does if you turn the bars without leaning.
+- [x] Kick (A) pushes; air drag on the rider.
+
+**Exit criteria (automated in `tests/scooter_tests.gd`):**
+- [x] Sits still on flat ground: no jitter or creep, wheel loads match statics.
+- [x] Coasts straight and stops where rolling resistance + drag predict (64.6 m from 5 m/s).
+- [x] Rolls down the bank with a balanced energy audit (no energy created).
+- [x] Turns: reaches the asked-for lean, the turn balances it, yaw rate
+      within 10% of the bicycle model.
+- [x] Concrete holds a 0.5 g carve that slides on steel.
+- [ ] → Phase 3: rolls onto the kicker *without the rear wheel lifting*. A
+      stiff-legged 74 kg body can't: on a 2 g transition the front wheel
+      lifts the whole mass before the body can pitch. Real riders absorb
+      this with their knees. The test runs and reports it as pending.
 
 ### Phase 3 — Rider mass, lean and balance (L)
 **Goal:** a rideable scooter. This is the most important phase in the plan.
@@ -210,18 +225,20 @@ solid PU wheels on concrete.
 - [ ] Rider forces act on the scooter body where the feet are and where the
       hands hold the bars. Combined centre of mass and inertia are updated
       as the rider moves.
-- [ ] **Lean → steer**: body lean moves the combined centre of mass. The
-      steering follows from headtube geometry plus a controlled steering
-      torque. Tune it until carving feels natural.
-- [ ] **Upright assist**: a torque that pushes toward "balanced for the
-      current speed and turn" (not plain vertical). Its strength is a slider,
-      with 0 meaning full simulation.
+- [x] **Lean → steer** (done in Phase 2): steering follows the lean.
+- [ ] **Rider weight shift replaces the balance torque**: the lean comes from
+      the rider moving their centre of mass, not a torque applied to the
+      body. The strength stays a slider, with 0 meaning full simulation.
+- [ ] Rider legs absorb transitions, so the rear wheel stays down on the
+      kicker (the pending Phase 2 test).
 - [ ] **Kick**: pressing A applies a foot-push force for a short time,
       only when grounded and below a top kicking speed.
 - [ ] Simple visuals: a capsule rider that leans and compresses with the
       simulation.
 
 **Exit criteria:**
+- The kicker test's pending checks pass: the rear wheel stays planted
+  through the transition, and it leaves at the lip angle.
 - Riding laps around the park at kicking speed feels controlled.
 - Carving tight and wide turns is predictable.
 - With assist at 0, riding is *hard but possible*. With the default assist,

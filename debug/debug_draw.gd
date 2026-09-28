@@ -9,6 +9,8 @@ extends Node
 ## F3 toggles drawing.
 
 var enabled := true
+## Named telemetry lines shown on the HUD, e.g. watch("speed", "12 km/h").
+var watches := {}
 
 var _lines := PackedVector3Array()
 var _colors := PackedColorArray()
@@ -78,6 +80,15 @@ func arrow(origin: Vector3, vector: Vector3, color := Color.WHITE, scale := 1.0)
 	var head := minf(length * 0.25, 0.15)
 	line(tip, tip - dir * head + side * head * 0.5, color)
 	line(tip, tip - dir * head - side * head * 0.5, color)
+
+
+## Shows `text` on the HUD under `label` until it's replaced or cleared.
+func watch(label: String, text: String) -> void:
+	watches[label] = text
+
+
+func clear_watches() -> void:
+	watches.clear()
 
 
 ## A small 3-axis cross at a point.

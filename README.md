@@ -13,13 +13,13 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 
 | Action | Gamepad | Keyboard fallback |
 |---|---|---|
-| Lean / weight | Left stick | WASD |
+| Lean (steers) / weight | Left stick | WASD |
 | Pose (compress / extend, tricks) | Right stick | Arrow keys |
 | Rear brake | Right trigger | Shift |
 | Kick | A / Cross | Space |
 | Reset | Start | R |
 | Tuning panel | Back / Select | Tab |
-| Fly camera on/off | D-pad up | F2 |
+| Camera: chase → overview → fly | D-pad up | F2 |
 | Fly camera move / look | Left / right stick | WASD / hold right mouse |
 | Fly camera down / up | LB / RB | Q / E (wheel: speed) |
 | Debug lines on/off | — | F3 |
@@ -47,6 +47,23 @@ layer 2 ("grindable").
 | Manual pad | 0.3 m tall, 4 m long, steel edges |
 | Rail | 0.35 m tall, 50 mm round |
 
+## The scooter
+
+One rigid body: a 4 kg scooter plus, for now, a 70 kg rigid "ballast"
+rider (the see-through capsule). Two sphere-cast wheels apply all ground
+forces: a stiff sprung compliance, rolling resistance, a rear-only brake
+and sideways grip that slides past the surface's friction (concrete grips
+about three times harder than steel).
+
+**Lean steers.** The left stick sets how far you lean. The front wheel then
+steers to whatever angle balances that lean at your speed, the way a
+bike's front wheel falls into a lean. At walking pace it steers directly.
+All values are sliders in the tuning panel (Tab / Back).
+
+Debug lines on the scooter: green = wheel load, orange = grip force (red
+when sliding), cyan = rolling direction, yellow cross = centre of mass,
+white = velocity.
+
 ## Debug tools
 
 - **HUD** (bottom left): raw stick position in grey, shaped intent in cyan,
@@ -65,12 +82,17 @@ layer 2 ("grindable").
 ## Tests
 
 ```sh
-godot --headless --path . res://tests/test_runner.tscn
+godot --headless --fixed-fps 120 --path . res://tests/test_runner.tscn
 ```
 
-Exits with 0 on success. It includes:
+`--fixed-fps 120` runs one physics tick per frame as fast as possible
+instead of in real time. Exits with 0 on success. It includes:
 - an end-to-end check that a recorded replay drives a rigid body to the
   *identical* final transform;
 - a collider check that casts rays down across every park prop and
   compares each hit with the height the prop's own profile predicts,
-  including steel versus concrete.
+  including steel versus concrete;
+- scooter physics checked against hand-calculated values: statics at rest,
+  coast distance, an energy audit down the bank, bicycle-model steering,
+  and grip on concrete versus steel. "note" lines report criteria that
+  belong to a later phase.

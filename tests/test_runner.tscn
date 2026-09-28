@@ -1,15 +1,13 @@
 [gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
+[ext_resource type="PhysicsMaterial" path="res://scenes/props/materials/concrete.tres" id="2_concrete"]
 
 [sub_resource type="BoxShape3D" id="ground_shape"]
-size = Vector3(100, 1, 100)
+size = Vector3(400, 1, 400)
 
 [sub_resource type="BoxShape3D" id="body_shape"]
 size = Vector3(0.5, 0.5, 0.5)
-
-[sub_resource type="PhysicsMaterial" id="ground_mat"]
-friction = 0.6
 
 [sub_resource type="PhysicsMaterial" id="body_mat"]
 friction = 0.6
@@ -18,7 +16,7 @@ friction = 0.6
 script = ExtResource("1_runner")
 
 [node name="Ground" type="StaticBody3D" parent="."]
-physics_material_override = SubResource("ground_mat")
+physics_material_override = ExtResource("2_concrete")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)

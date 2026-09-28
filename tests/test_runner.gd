@@ -1,7 +1,8 @@
 extends Node3D
 ## Headless tests. Run from the project folder with:
-##   godot --headless --path . res://tests/test_runner.tscn
-## Exits with code 0 when everything passes, 1 otherwise.
+##   godot --headless --fixed-fps 120 --path . res://tests/test_runner.tscn
+## (--fixed-fps runs one physics tick per frame as fast as possible, instead
+## of in real time.) Exits with code 0 when everything passes, 1 otherwise.
 ##
 ## The replay test records synthetic input that pushes a rigid body, plays it
 ## back, and requires the body to end in *exactly* the same place. Replays
@@ -10,30 +11,36 @@ extends Node3D
 const TEST_REPLAY := "user://replays/test.replay"
 const RECORD_TICKS := 240
 
-enum Stage { UNIT, PROPS, RECORDING, PLAYBACK }
+enum Stage { SETUP, RECORDING, PLAYBACK }
 
-static var stage := Stage.UNIT
+static var stage := Stage.SETUP
 static var failures := 0
 static var recorded_intents: Array[PackedFloat64Array] = []
 static var played_intents: Array[PackedFloat64Array] = []
 static var recorded_final := Transform3D()
 
 var _tick := 0
-var _park: Node3D
 
 @onready var _body: RigidBody3D = $Body
 
 
 func _ready() -> void:
-	match stage:
-		Stage.UNIT:
-			_run_unit_tests()
-			# Colliders only exist in the physics space after a tick.
-			_park = preload("res://scenes/park.tscn").instantiate()
-			add_child(_park)
-			stage = Stage.PROPS
-		Stage.PLAYBACK:
-			pass
+	if stage != Stage.SETUP:
+		return # reloaded for the replay test
+	_run_unit_tests()
+
+	var park: Node3D = preload("res://scenes/park.tscn").instantiate()
+	add_child(park)
+	# Colliders only exist in the physics space after a tick.
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_run_prop_tests(park)
+	park.queue_free()
+
+	await ScooterTests.new(self).run()
+
+	stage = Stage.RECORDING
+	RiderInput.start_recording()
 
 
 func _physics_process(_delta: float) -> void:
@@ -44,14 +51,6 @@ func _physics_process(_delta: float) -> void:
 		_body.apply_central_impulse(Vector3.UP * 2.0)
 
 	match stage:
-		Stage.PROPS:
-			_tick += 1
-			if _tick == 2:
-				_run_prop_tests()
-				_park.queue_free()
-				_tick = 0
-				stage = Stage.RECORDING
-				RiderInput.start_recording()
 		Stage.RECORDING:
 			if RiderInput.mode != RiderInput.Mode.RECORDING:
 				return
@@ -143,9 +142,9 @@ func _run_unit_tests() -> void:
 ## Every prop's collider must match the geometry it was built from: rays
 ## cast down across each prop must hit at the profile's height, on the
 ## right material. A wrongly wound collider (invisible from above) fails.
-func _run_prop_tests() -> void:
+func _run_prop_tests(park: Node3D) -> void:
 	var props := 0
-	for prop in _park.get_children():
+	for prop in park.get_children():
 		if prop is ProfileProp:
 			props += 1
 			_check_profile_prop(prop)
@@ -197,6 +196,11 @@ static func _is_steel(hit: Dictionary) -> bool:
 	var body := hit["collider"] as StaticBody3D
 	return body != null and body.physics_material_override == PropMaterials.STEEL \
 			and body.collision_layer & PropMaterials.LAYER_GRINDABLE != 0
+
+
+## Information that isn't pass/fail.
+func note(description: String) -> void:
+	print("  note  " + description)
 
 
 func check(condition: bool, description: String) -> void:

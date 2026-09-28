@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scooter/scooter.gd" id="1_scooter"]
+
+[node name="Scooter" type="RigidBody3D"]
+script = ExtResource("1_scooter")

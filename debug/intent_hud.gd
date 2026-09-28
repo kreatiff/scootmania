@@ -25,7 +25,7 @@ func _process(_delta: float) -> void:
 	var pads := Input.get_connected_joypads()
 	var pad_name := Input.get_joy_name(pads[0]) if not pads.is_empty() else "none (keyboard fallback)"
 	var i := RiderInput.intent
-	_info.text = "\n".join([
+	var lines := PackedStringArray([
 		"FPS %d   physics %d Hz" % [Engine.get_frames_per_second(), Engine.physics_ticks_per_second],
 		"Gamepad: %s" % pad_name,
 		"Replay: %s" % _replay_text(),
@@ -34,8 +34,13 @@ func _process(_delta: float) -> void:
 		"pose  (%+.2f, %+.2f)" % [i.pose.x, i.pose.y],
 		"brake  %.2f   kick %s" % [i.brake, "ON" if i.kick else "off"],
 		"",
-		"F3 debug lines · F5 record · F6 replay · Tab/Back tuning",
+		"F2 camera · F3 debug lines · F5 record · F6 replay · Tab/Back tuning",
 	])
+	if not DebugDraw.watches.is_empty():
+		lines.append("")
+		for label in DebugDraw.watches:
+			lines.append("%s  %s" % [label, DebugDraw.watches[label]])
+	_info.text = "\n".join(lines)
 	queue_redraw()
 
 

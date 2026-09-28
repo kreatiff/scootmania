@@ -17,6 +17,8 @@ var _pitch := 0.0
 
 
 func _ready() -> void:
+	# Moved every rendered frame in _process, so don't interpolate it too.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_sync_angles()
 
 
@@ -25,7 +27,6 @@ func copy_view(from: Camera3D) -> void:
 	global_transform = from.global_transform
 	fov = from.fov
 	_sync_angles()
-	reset_physics_interpolation()
 
 
 func _unhandled_input(event: InputEvent) -> void:
