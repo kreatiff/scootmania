@@ -13,7 +13,7 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 
 | Action | Gamepad | Keyboard fallback |
 |---|---|---|
-| Lean (steers) / in the air: pitch and spin | Left stick | WASD |
+| Lean (steers) / weight back-forward (manuals) / in the air: pitch and spin | Left stick | WASD |
 | Crouch / extend (pop, pump) | Right stick down / up | Arrow keys |
 | Tricks (in the air) | Right stick flick: sideways = tailwhip, up/down = barspin | Arrow keys (tap) |
 | Rear brake | Right trigger | Shift |
@@ -101,6 +101,14 @@ transition. Rolling in passively, your knees soak up the ramp and you stall
 below the lip. The park's quarter pipe has a 70° lip, which throws you onto
 the deck unless you spin around.
 
+**Manuals.** Pull the left stick back and your weight goes back onto the
+rear wheel; far enough (about ¾ of the way) and the front lifts. Then it's
+a balance: the deck keeps tipping up unless you ease off, and drops if you
+ease off too much. Full stick back loops you out. Stick forward does the
+same on the front wheel (a nose manual, which needs more stick). A little
+help from the arms slows the balance down to something a thumb can do
+(`manual_assist`, 0 = raw physics). The running time shows at the top.
+
 **Tricks.** In the air, flick the right stick: sideways for a
 **tailwhip** (the deck whips around the bars), up or down for a
 **barspin** (the bars spin around). A flick is a quick move from the
@@ -162,6 +170,9 @@ instead of in real time. Exits with 0 on success. It includes:
 - turning: full stick at every speed from 0.5 to 8 m/s never falls or
   slides; the foot plant turns in less than 60% of the carving radius at
   walking pace, scuffs at the expected rate, and blocks kicking;
+- manuals: weight back moves the load onto the rear wheel as statics
+  predicts; a small shift keeps both wheels down; full back loops out; a
+  player reacting 0.25 s late can balance a manual and a nose manual;
 - tricks: flick recognition (quick flicks count once; slow pushes don't),
   a tailwhip and a barspin off the kicker land, a late flick bails, a
   flick on the ground does nothing;

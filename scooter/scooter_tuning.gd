@@ -115,8 +115,22 @@ extends Resource
 ## Hip shift against the lean rate, to settle without overshoot.
 @export_range(0.0, 1.0, 0.01, "suffix:m·s/rad") var hip_lean_damping := 0.0
 @export_range(0.05, 0.5, 0.01, "suffix:m") var max_hip_shift := 0.3
-## Weight forward/back at full left-stick up/down.
-@export_range(0.0, 0.3, 0.01, "suffix:m") var max_hip_fore_aft := 0.12
+## Weight forward/back at full left-stick up/down. Far enough back
+## lifts the front wheel (a manual); forward lifts the rear (a nose manual).
+@export_range(0.0, 0.6, 0.01, "suffix:m") var max_hip_fore_aft := 0.4
+## How fast the hips move fore/aft.
+@export_range(0.2, 5.0, 0.05, "suffix:m/s") var hip_fore_aft_rate := 1.2
+
+@export_group("Manuals")
+## Help balancing a manual: 0 = raw physics, 1 = full help.
+@export_range(0.0, 1.0, 0.01) var manual_assist := 0.3
+## Deck angle the assist balances a manual at (nose manual: the same, down).
+@export_range(3.0, 35.0, 0.5, "suffix:°") var manual_balance_deg := 14.0
+@export_range(0.0, 2000.0, 10.0, "suffix:N·m/rad") var manual_stiffness := 600.0
+@export_range(0.0, 300.0, 5.0, "suffix:N·m·s/rad") var manual_damping := 80.0
+## Counts as a manual past this deck angle, held at least this long.
+@export_range(1.0, 15.0, 0.5, "suffix:°") var manual_min_deg := 4.0
+@export_range(0.1, 2.0, 0.05, "suffix:s") var manual_min_time := 0.5
 
 @export_group("Balance assist")
 ## Help from a torque on top of the rider's own weight shift, at speed.

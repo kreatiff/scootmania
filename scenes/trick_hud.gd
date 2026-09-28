@@ -1,7 +1,8 @@
 class_name TrickHud
 extends Label
 ## The trick callout at the top of the screen: "TAILWHIP + BARSPIN" in
-## green when landed, "BARSPIN — too early" in red when not. Fades out in
+## green when landed, "BARSPIN — too early" in red when not, and a running
+## manual in white. Fades out in
 ## real time, so slow motion doesn't hold it on screen.
 
 const SHOW_TIME := 1.6
@@ -24,6 +25,13 @@ func _ready() -> void:
 func show_result(result: String, landed: bool) -> void:
 	text = result
 	add_theme_color_override("font_color", Color(0.45, 1.0, 0.5) if landed else Color(1.0, 0.4, 0.35))
+	_shown_at = Time.get_ticks_msec() / 1000.0
+
+
+## Something still going on, like a manual's running time (white).
+func show_live(result: String) -> void:
+	text = result
+	add_theme_color_override("font_color", Color(1, 1, 1))
 	_shown_at = Time.get_ticks_msec() / 1000.0
 
 

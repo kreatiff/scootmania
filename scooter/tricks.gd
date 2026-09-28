@@ -33,7 +33,12 @@ var last_landed := false
 ## True on the tick an air's tricks were settled (landed or not).
 var just_resolved := false
 
+## Seconds into the current manual (0 = not in one), and which kind.
+var manual_time := 0.0
+var nose_manual := false
+
 var _flick := FlickDetector.new()
+var _manual_off := 0.0
 
 
 ## One tick. Returns true when the ground cut a trick short (a bail).
@@ -45,6 +50,7 @@ func update(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent, delta:
 		last_flick = flick
 		last_flick_age = 0.0
 	var airborne := not scooter.is_grounded() and not scooter.rider.bailed
+	_update_manual(scooter, tuning, delta)
 
 	if airborne and active == Trick.NONE and flick != Vector2.ZERO:
 		_start(flick)
@@ -86,8 +92,44 @@ func fail_landing() -> void:
 		last_result += " — bailed"
 
 
+## A manual: rolling on one wheel, deck tipped past manual_min_deg to
+## start. Ends a moment after it stops being on one wheel (both down, or
+## off the ground), or at once on a bail.
+func _update_manual(scooter: Scooter, tuning: ScooterTuning, delta: float) -> void:
+	var pitch := scooter.rider.manual_pitch # 0 unless exactly one wheel is down
+	var threshold := 0.0 if manual_time > 0.0 else deg_to_rad(tuning.manual_min_deg)
+	var on_one := pitch != 0.0 and absf(pitch) > threshold \
+			and scooter.linear_velocity.length() > 0.5 and not scooter.rider.bailed
+	if on_one:
+		if manual_time == 0.0:
+			nose_manual = pitch < 0.0
+		manual_time += delta
+		_manual_off = 0.0
+		return
+	if manual_time == 0.0:
+		return
+	# A wheel brushing the ground, or the other skipping off it for a tick,
+	# doesn't end it.
+	var both_down := scooter.front_wheel.in_contact and scooter.rear_wheel.in_contact
+	if not scooter.rider.bailed:
+		_manual_off += delta
+		if _manual_off < 0.1:
+			return
+	var kind := "NOSE MANUAL" if nose_manual else "MANUAL"
+	if manual_time >= tuning.manual_min_time:
+		just_resolved = true
+		last_landed = both_down and not scooter.rider.bailed
+		last_result = "%s %.1f s" % [kind, manual_time]
+		if scooter.rider.bailed:
+			last_result += " — looped out" if not nose_manual else " — over the bars"
+	manual_time = 0.0
+	_manual_off = 0.0
+
+
 ## Cancels everything (on a bail landing or a reset). Keeps last_result.
 func clear() -> void:
+	manual_time = 0.0
+	_manual_off = 0.0
 	active = Trick.NONE
 	progress = 0.0
 	done.clear()

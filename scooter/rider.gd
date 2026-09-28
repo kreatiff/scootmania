@@ -34,6 +34,9 @@ var hip_shift := Vector2.ZERO
 ## Running total of work done by the leg and hip forces on both bodies, J.
 ## Muscles add energy (extending), dampers remove it.
 var work_done := 0.0
+## Deck pitch against the ground with one wheel down (+ nose up), rad; 0
+## with both wheels down or none.
+var manual_pitch := 0.0
 ## True while crashed: the rider has let go and falls as a free body.
 var bailed := false
 ## Direction the legs point, from the feet toward the hips (see
@@ -82,6 +85,7 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 		lean: float, lean_rate: float, target_lean: float) -> void:
 	var delta := get_physics_process_delta_time()
 	_finish_work(scooter, delta)
+	manual_pitch = 0.0
 	if bailed:
 		leg_force = 0.0
 		return
@@ -92,7 +96,10 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	# so the hips sit centred.
 	var sideways := tuning.hip_lean_gain * (target_lean - lean) - tuning.hip_lean_damping * lean_rate
 	hip_shift.x = clampf(sideways, -tuning.max_hip_shift, tuning.max_hip_shift)
-	hip_shift.y = intent.lean.y * tuning.max_hip_fore_aft
+	# Moving your weight fore/aft takes a moment: hips travel at a limited
+	# rate, so a stick flick doesn't kick the deck.
+	hip_shift.y = move_toward(hip_shift.y, intent.lean.y * tuning.max_hip_fore_aft,
+			tuning.hip_fore_aft_rate * delta)
 
 	# Leg length from the right stick: down crouches, up extends.
 	var stand := tuning.stand_leg_length()
@@ -159,16 +166,33 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	# round. (Applied at a single point on the deck below the centre of mass,
 	# a tilted leg force pitched the light scooter nose-up and lifted it off
 	# ramp walls.) The wheels then share the load by where that centre sits.
+	#
+	# Except where the rider chooses to shift their weight fore/aft (left
+	# stick): then the push square to the deck moves with them, onto
+	# the rear or front wheel. Past the deck's end, the arms on the bars
+	# carry the rest. Far enough back lifts the front: a manual. Only with
+	# a wheel on the ground; in the air, AirControl has the pitch.
 	var com_velocity := scooter.linear_velocity
-	scooter.add_tracked_force(-(leg + fore), com)
+	var deck_up := scooter.global_basis.y
+	var press := deck_up * (leg + fore).dot(deck_up)
+	var pressure_point := com
+	if scooter.is_grounded():
+		var deck_forward := -scooter.global_basis.z
+		# The chosen shift, not the measured one: on a ramp the body lags the
+		# leg line under the load, and that mustn't lever the deck.
+		pressure_point += deck_forward * hip_shift.y
+	var pressure_velocity := scooter.linear_velocity + scooter.angular_velocity.cross(pressure_point - com)
+	scooter.add_tracked_force(-(leg + fore - press), com)
+	scooter.add_tracked_force(-press, pressure_point)
 	scooter.add_tracked_force(-side, mast_point)
-	work_done += ((leg + side + fore).dot(linear_velocity) - (leg + fore).dot(com_velocity)
-			- side.dot(mast_velocity)) * delta
+	work_done += ((leg + side + fore).dot(linear_velocity) - (leg + fore - press).dot(com_velocity)
+			- press.dot(pressure_velocity) - side.dot(mast_velocity)) * delta
 	var to_local := scooter.global_transform.affine_inverse()
 	_last_on_rider = leg + side + fore
 	_last_rider_velocity = linear_velocity
 	_last_on_scooter = [
-		[-(leg + fore), to_local * com, com_velocity],
+		[-(leg + fore - press), to_local * com, com_velocity],
+		[-press, to_local * pressure_point, pressure_velocity],
 		[-side, to_local * mast_point, mast_velocity],
 	]
 
@@ -179,10 +203,35 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 		return
 	var pitch_axis := scooter.global_basis.x
 	var pitch_torque := -pitch_axis * tuning.deck_pitch_damping * scooter.angular_velocity.dot(pitch_axis)
+	pitch_torque += manual_assist(scooter, tuning, intent)
 	scooter.add_tracked_torque(pitch_torque)
 	work_done += pitch_torque.dot(scooter.angular_velocity) * delta
 	_last_torque = pitch_torque
 	_last_angular = scooter.angular_velocity
+
+
+## Balancing a manual is an inverted pendulum with a ~0.3 s time
+## constant: realistic, and too fast for a thumb. While you ask for one
+## (left stick back with only the rear wheel down, or forward with only the
+## front), the arms and ankles pull the deck toward the balance angle.
+## manual_assist scales it; 0 is the raw physics. Pull too hard and you
+## still loop out; ease off and the wheel drops.
+func manual_assist(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent) -> Vector3:
+	manual_pitch = 0.0
+	var front := scooter.front_wheel.in_contact
+	var rear := scooter.rear_wheel.in_contact
+	if front == rear:
+		return Vector3.ZERO
+	var wheel := scooter.rear_wheel if rear else scooter.front_wheel
+	manual_pitch = asin(clampf((-scooter.global_basis.z).dot(wheel.contact_normal), -1.0, 1.0))
+	var wanted := deg_to_rad(tuning.manual_balance_deg) * (1.0 if rear else -1.0)
+	var asking := intent.lean.y < -0.2 if rear else intent.lean.y > 0.2
+	if not asking or tuning.manual_assist <= 0.0:
+		return Vector3.ZERO
+	var rate := scooter.angular_velocity.dot(scooter.global_basis.x)
+	var torque := (tuning.manual_stiffness * (wanted - manual_pitch) - tuning.manual_damping * rate) \
+			* tuning.manual_assist
+	return scooter.global_basis.x * torque
 
 
 func _finish_work(scooter: RigidBody3D, delta: float) -> void:

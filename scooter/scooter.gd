@@ -552,9 +552,9 @@ func _draw_debug(speed: float) -> void:
 		DebugDraw.watch("landing", "%s  (tilt %.0f°, sideways %.0f°)" % [
 				AirControl.landing_name(air.last_landing), rad_to_deg(air.last_tilt), rad_to_deg(air.last_sideways)])
 	var flick := "flick %s %.1f s ago" % [tricks.last_flick, tricks.last_flick_age] if tricks.last_flick_age < 5.0 else "no flick"
-	DebugDraw.watch("tricks", "%s   %s   last: %s" % [
+	DebugDraw.watch("tricks", "%s   %s   manual pitch %+.0f° (%.1f s)   last: %s" % [
 			"%s %.0f%%" % [Tricks.trick_name(tricks.active), tricks.progress * 100.0] if tricks.active != Tricks.Trick.NONE else "—",
-			flick, tricks.last_result])
+			flick, rad_to_deg(rider.manual_pitch), tricks.manual_time, tricks.last_result])
 	DebugDraw.watch("foot", "HELD (scuffing, full lock)" if foot.held else ("down (standing)" if foot.planted else "on the deck"))
 	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
 			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])

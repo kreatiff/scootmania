@@ -29,6 +29,12 @@ func _ready() -> void:
 	_chase.make_current()
 
 
+func _process(_delta: float) -> void:
+	var tricks := _scooter.tricks
+	if tricks.manual_time >= _scooter.tuning.manual_min_time:
+		_trick_hud.show_live("%s %.1f s" % ["NOSE MANUAL" if tricks.nose_manual else "MANUAL", tricks.manual_time])
+
+
 func _on_trick_finished(result: String, landed: bool) -> void:
 	_trick_hud.show_result(result, landed)
 	if landed and not _tricks_landed.has(result):

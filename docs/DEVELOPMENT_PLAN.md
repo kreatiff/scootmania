@@ -454,13 +454,37 @@ tricks.
       mistake. (Tests: both land when flicked after the pop, and a late
       flick bails.)
 
+### Manuals ✅
+- [x] **Weight goes where the rider puts it.** The legs' push square to the
+      deck is applied under the rider's chosen fore/aft shift, not at the
+      scooter's centre of mass, so weight back loads the rear wheel. Past
+      the deck's end, the arms on the bars carry the rest. The shift, not
+      the measured body position, and only with a wheel down: on ramps
+      the body lags the leg line under load, and levering the deck from
+      that broke vert and the kicker (the Phase 5 problem).
+- [x] Hips travel ±0.4 m fore/aft (was ±0.12 m), at up to 1.2 m/s.
+- [x] **Manual balance assist.** Raw, a manual is an inverted pendulum
+      with a ~0.3 s time constant: a simulated player reacting 0.25 s
+      late couldn't hold it. While you ask for a manual (stick back with
+      only the rear wheel down, or forward with only the front), the arms
+      pull the deck toward 14° with a soft spring, at 0.3 strength. At
+      0.45 and above it held the manual by itself at almost any stick
+      position (no skill left); at 0.3, no fixed stick position holds it,
+      full back loops out, and the late player balances it.
+- [x] Manuals are timed and called out ("MANUAL 2.4 s", "— looped out").
+      A wheel skipping for a tick doesn't end one.
+
+**Exit criteria:**
+- [ ] Hands-on: holding a manual across the flat feels like balancing,
+      learnable in a few minutes, and looping out reads as pulling too
+      hard.
+
 ---
 
 ## 6. Out of scope for now (in rough later order)
 
 1. Grinds and stalls on coping and rails (special contact handling).
-2. Manuals, meaning balance on one wheel. This is a genuine inverted
-   pendulum, so it's a good fit for the realism goal.
+2. ~~Manuals~~ (done, see above).
 3. More tricks: 180s/360s, bri flips, whip variations, combos.
 4. Rider character model, IK for hands and feet, animation blending.
 5. Ragdoll bails (stage 2: a single tumbling body; stage 3: a jointed ragdoll).
