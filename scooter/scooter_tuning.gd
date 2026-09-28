@@ -91,6 +91,8 @@ extends Resource
 ## doesn't flop nose-down off a lip). A damper, so on transitions the deck
 ## still follows the ramp.
 @export_range(0.0, 200.0, 1.0, "suffix:N·m·s/rad") var deck_pitch_damping := 60.0
+## How quickly the body lines up with the ground's push (time constant).
+@export_range(0.01, 0.5, 0.01, "suffix:s") var leg_axis_response := 0.05
 ## The knee and hip joints' hard limits.
 @export_range(10000.0, 200000.0, 1000.0, "suffix:N/m") var leg_stop_stiffness := 60000.0
 
@@ -123,6 +125,38 @@ extends Resource
 ## Strongest balance correction a rider could make. Without a cap, a full
 ## stick flick demands more sideways grip than the tyres have.
 @export_range(50.0, 2000.0, 10.0, "suffix:N·m") var max_balance_torque := 450.0
+
+@export_group("Air and landing")
+## Both wheels off the ground this long counts as airborne (short hops over
+## bumps don't).
+@export_range(0.02, 0.5, 0.01, "suffix:s") var airborne_min_time := 0.12
+## Scales every air rotation rate below. 0 = no air control at all.
+@export_range(0.0, 1.0, 0.01) var air_control_strength := 1.0
+## Nose down/up rate at full left stick forward/back.
+@export_range(0.0, 720.0, 10.0, "suffix:°/s") var air_pitch_rate_deg := 200.0
+## Spin rate at full left stick left/right.
+@export_range(0.0, 1080.0, 10.0, "suffix:°/s") var air_spin_rate_deg := 360.0
+## How quickly the rider levels the scooter in roll (1/s), and how firmly.
+@export_range(0.0, 20.0, 0.5, "suffix:1/s") var air_level_rate := 4.0
+@export_range(0.0, 1.0, 0.01) var air_level_strength := 1.0
+## Time to reach a new rotation rate. Lower is snappier.
+@export_range(0.02, 0.5, 0.01, "suffix:s") var air_control_response := 0.08
+## Strongest twist the rider can put on the scooter in the air.
+@export_range(10.0, 1000.0, 10.0, "suffix:N·m") var air_max_torque := 250.0
+## Rotates the scooter to meet the landing, shortly before touchdown.
+@export_range(0.0, 1.0, 0.01) var landing_assist_strength := 1.0
+@export_range(0.05, 1.0, 0.01, "suffix:s") var landing_assist_window := 0.3
+## Only helps when already this close to lined up.
+@export_range(0.0, 90.0, 1.0, "suffix:°") var landing_assist_max_deg := 60.0
+## Landing grades: tilt against the ground, and how sideways to the
+## direction of travel (fakie counts as straight).
+@export_range(0.0, 45.0, 1.0, "suffix:°") var landing_clean_deg := 15.0
+@export_range(0.0, 90.0, 1.0, "suffix:°") var landing_sketchy_deg := 35.0
+@export_range(0.0, 45.0, 1.0, "suffix:°") var landing_sideways_clean_deg := 20.0
+@export_range(0.0, 90.0, 1.0, "suffix:°") var landing_sideways_sketchy_deg := 50.0
+## Slow motion when bailing: game speed and how long it lasts (real time).
+@export_range(0.05, 1.0, 0.05) var bail_slowmo_scale := 0.3
+@export_range(0.0, 3.0, 0.1, "suffix:s") var bail_slowmo_time := 0.6
 
 @export_group("Recovery")
 ## Tipped further than this counts as fallen.

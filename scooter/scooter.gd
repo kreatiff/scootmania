@@ -20,6 +20,11 @@ extends RigidBody3D
 ## their hips. Near standstill, where nobody can balance by steering, a
 ## balance torque stands in for putting a foot down.
 
+## A landing was graded (AirControl.Landing).
+signal landed(grade: int)
+## The rider let go: a crash or a bailed landing.
+signal bailed
+
 ## Scooter collision sits on its own layer and only hits the world.
 const LAYER_SCOOTER := 4
 const AIR_DENSITY := 1.2
@@ -41,6 +46,9 @@ var lean_rate := 0.0
 var balance_torque := 0.0
 ## Running total of work done by the balance assist (an outside force), J.
 var assist_work := 0.0
+## Running total of work done by air control torques, J.
+var air_work := 0.0
+var air := AirControl.new()
 var _last_assist_force := Vector3.ZERO
 var _last_assist_velocity := Vector3.ZERO
 ## How long the scooter has been tipped past fallen_angle_deg, s.
@@ -109,7 +117,7 @@ func _physics_process(delta: float) -> void:
 	pending_torque = Vector3.ZERO
 	var grounded := is_grounded() # from last tick's contacts
 	if is_fallen():
-		rider.bailed = true # let go; stood back up by recovery
+		bail() # let go; stood back up by recovery
 	rider.simulate(self, tuning, intent, lean_angle, lean_rate, target_lean)
 	_apply_push(intent, speed, grounded, delta)
 	_apply_drag()
@@ -120,6 +128,13 @@ func _physics_process(delta: float) -> void:
 		_apply_balance_torque(speed)
 	front_wheel.simulate(self, tuning, delta)
 	rear_wheel.simulate(self, tuning, delta)
+	if front_wheel.in_contact and rear_wheel.in_contact:
+		rider.follow_ramp(self, _ramp_normal(), _ramp_curvature(), speed, tuning.leg_axis_response, delta)
+	var landing := air.update(self, tuning, intent, delta)
+	if landing != AirControl.Landing.NONE:
+		landed.emit(landing)
+		if landing == AirControl.Landing.BAIL:
+			bail()
 
 	_steering_visual.rotation = Vector3.ZERO
 	_steering_visual.rotate_object_local(tuning.headtube_axis().normalized(), -steer_angle)
@@ -138,12 +153,31 @@ func add_tracked_torque(torque: Vector3) -> void:
 	pending_torque += torque
 
 
+## The rider lets go (once), and the scooter is stood back up by recovery.
+func bail() -> void:
+	if rider.bailed:
+		return
+	rider.bailed = true
+	bailed.emit()
+
+
 func is_grounded() -> bool:
 	return front_wheel.in_contact or rear_wheel.in_contact
 
 
+## Tipped over: on the wheels but tipped against the surface under them;
+## off the wheels, rolled onto its side. Riding up a vert wall (pitched
+## vertical) and pitching in the air (airs, later flips) aren't fallen;
+## landings are graded separately.
 func is_fallen() -> bool:
-	return global_basis.y.dot(Vector3.UP) < cos(deg_to_rad(tuning.fallen_angle_deg))
+	var limit := deg_to_rad(tuning.fallen_angle_deg)
+	if is_grounded():
+		var normal := Vector3.ZERO
+		for wheel in [front_wheel, rear_wheel]:
+			if wheel.in_contact:
+				normal += wheel.contact_normal
+		return global_basis.y.dot(normal.normalized()) < cos(limit)
+	return absf(global_basis.x.y) > sin(limit)
 
 
 ## Hung up: wheels off the ground and not moving, e.g. resting on the deck
@@ -227,7 +261,7 @@ func _handle_recovery(intent: RiderIntent, delta: float) -> bool:
 		_reset_held_time = 0.0
 		_respawned_this_hold = false
 
-	if is_fallen() or is_stuck():
+	if is_fallen() or is_stuck() or rider.bailed:
 		fallen_time += delta
 		var delay := tuning.auto_recover_delay
 		if delay > 0.0:
@@ -361,6 +395,29 @@ func _apply_balance_torque(speed: float) -> void:
 	_last_assist_velocity = rider.linear_velocity
 
 
+## Average of the wheels' contact normals, within the pitch plane.
+func _ramp_normal() -> Vector3:
+	var right := global_basis.x
+	var n := front_wheel.contact_normal + rear_wheel.contact_normal
+	n -= right * n.dot(right)
+	return n.normalized() if n.length_squared() > 1e-4 else global_basis.y
+
+
+## Curvature of the surface along the direction of travel, from how much
+## the contact normal turns between the wheels: 1/m, + for a concave ramp
+## (curving up ahead, like a transition), − for a crest.
+func _ramp_curvature() -> float:
+	var right := global_basis.x
+	var front := front_wheel.contact_normal - right * front_wheel.contact_normal.dot(right)
+	var rear := rear_wheel.contact_normal - right * rear_wheel.contact_normal.dot(right)
+	if front.length_squared() < 1e-4 or rear.length_squared() < 1e-4:
+		return 0.0
+	var angle := front.angle_to(rear)
+	# Concave: the front normal is tilted back relative to the rear one.
+	var sign := -1.0 if (front.normalized() - rear.normalized()).dot(-global_basis.z) > 0.0 else 1.0
+	return sign * angle / tuning.wheelbase
+
+
 ## Lean of the whole system: the angle, seen along the direction of travel,
 ## between vertical and the line from the wheels' contact line to the
 ## combined centre of mass. + is leaning right.
@@ -404,6 +461,15 @@ func _draw_debug(speed: float) -> void:
 	DebugDraw.watch("lean", "%+.1f° (target %+.1f°)   steer %+.1f°   balance %+.0f N·m"
 			% [rad_to_deg(lean_angle), rad_to_deg(target_lean), rad_to_deg(steer_angle), balance_torque])
 	DebugDraw.watch("wheels", "F %s   R %s" % [_wheel_text(front_wheel), _wheel_text(rear_wheel)])
+	if air.airborne:
+		var eta := "" if air.time_to_landing == INF else "   landing in %.2f s%s" % [
+				air.time_to_landing, "  ASSIST" if air.assist_active else ""]
+		DebugDraw.watch("air", "%.2f s%s" % [air.air_time, eta])
+	else:
+		DebugDraw.watches.erase("air")
+	if air.last_landing != AirControl.Landing.NONE:
+		DebugDraw.watch("landing", "%s  (tilt %.0f°, sideways %.0f°)" % [
+				AirControl.landing_name(air.last_landing), rad_to_deg(air.last_tilt), rad_to_deg(air.last_sideways)])
 	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
 			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])
 	DebugDraw.point(system_center_of_mass(), Color.ORANGE_RED, 0.08)

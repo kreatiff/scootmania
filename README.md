@@ -13,7 +13,7 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 
 | Action | Gamepad | Keyboard fallback |
 |---|---|---|
-| Lean (steers) / weight | Left stick | WASD |
+| Lean (steers) / in the air: pitch and spin | Left stick | WASD |
 | Crouch / extend (pop, pump) | Right stick down / up | Arrow keys |
 | Rear brake | Right trigger | Shift |
 | Kick | A / Cross | Space |
@@ -74,6 +74,20 @@ into the turn to balance the lean, the way a real rider balances a bike
 or scooter. At walking pace it steers directly, and a "foot down" assist
 keeps you upright when nearly stopped.
 
+**Airs.** Once both wheels leave the ground, the left stick controls the
+scooter in the air: forward/back pitches the nose down/up, sideways spins.
+Stick centred holds the pitch, and any spin you took off with carries on.
+Just before landing, a **landing assist** lines the scooter up with the
+ground if it's already within 60° (its strength is a slider). Each landing
+is graded CLEAN, sketchy or BAIL, from the tilt against the ground and how
+sideways you are to your direction of travel (landing fakie is fine). On a
+bail the rider lets go and the game drops into slow motion.
+
+To air out of a quarter pipe, crouch on the way in and extend up the
+transition. Rolling in passively, your knees soak up the ramp and you stall
+below the lip. The park's quarter pipe has a 70° lip, which throws you onto
+the deck unless you spin around.
+
 **Falling over:** tipped past 60° (or hung up: wheels off the ground and
 stopped), the rider lets go. After 1.5 s the
 scooter stands itself up where it came to rest (the delay is a slider;
@@ -121,5 +135,9 @@ instead of in real time. Exits with 0 on success. It includes:
   rider's muscle work, the rear wheel staying planted on the kicker,
   bicycle-model steering, grip on concrete versus steel, and recovery;
 - legs: pop height (with and without a crouch), popping off the kicker,
-  and pumping a mini ramp for 20 s with an energy audit. "note" lines report criteria that
-  belong to a later phase.
+  and pumping a mini ramp for 20 s with an energy audit;
+- airs: kicker landings with and without the assist, air control (pitch
+  hold, nose down, spin), a bad landing that bails and recovers, an air
+  back into a vert quarter pipe, and slow motion.
+
+"note" lines report measurements without pass/fail.

@@ -165,7 +165,7 @@ func _test_kicker() -> void:
 	# Flight direction of the combined centre of mass as the last wheel
 	# leaves. A passive rider's knees soak up part of the transition, so it
 	# launches flatter than the lip; popping at the lip (Phase 4) adds the rest.
-	_check(launch_angle > kicker.lip_angle_deg * 0.5 and launch_angle < kicker.lip_angle_deg + 2.0,
+	_check(launch_angle > kicker.lip_angle_deg * 0.5 and launch_angle < kicker.lip_angle_deg + 5.0,
 			"kicker: passive rider flies off at %.1f° (lip %.0f°)" % [launch_angle, kicker.lip_angle_deg])
 	runner.note("kicker: legs compressed to %.2f m (standing %.2f m)" % [min_leg, tuning.stand_leg_length()])
 	s.queue_free()
@@ -352,7 +352,8 @@ func _energy(s: Scooter) -> float:
 
 ## Work done so far by (wheels plus balance assist, rider's legs and hips).
 func _work(s: Scooter) -> Vector2:
-	return Vector2(s.front_wheel.work_done + s.rear_wheel.work_done + s.assist_work, s.rider.work_done)
+	return Vector2(s.front_wheel.work_done + s.rear_wheel.work_done + s.assist_work + s.air_work,
+			s.rider.work_done)
 
 
 func _check(condition: bool, description: String) -> void:

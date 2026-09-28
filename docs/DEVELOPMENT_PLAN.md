@@ -297,37 +297,69 @@ Fixes found along the way:
       rider stops), and the energy audit shows the gain comes from the legs.
 - [ ] Pumping the mini ramp by hand, with a controller, feels right *(you)*.
 
-### Phase 5 — Airs, landings and bails (M)
+### Phase 5 — Airs, landings and bails (M) ✅
 **Goal:** leaving the ground, controlling the air, and landing or bailing.
-- [ ] Airborne detection (both wheels without contact for more than N ticks).
-- [ ] **Air control, skate.-style.** Physically, a rider can't start a spin
-      in mid-air (angular momentum is conserved). We keep the flavour of that
-      but favour playability:
-  - Takeoff matters: leaning and winding up on the lip sets most of the
-    spin and flip, which rewards good riding.
-  - The left stick adds a moderate amount of air torque on top, so you can
-    always correct and adjust. Its strength is a slider.
-- [ ] **Landing assist**: in the last fraction of a second before
-      touchdown, gently rotate the scooter toward the landing surface when
-      it's already close. It's skate.'s hidden helper and a big part of why
-      landings feel fair. Its strength and the maximum angle it can correct
-      are sliders.
-- [ ] Landing evaluation, *after* the assist: angle between the deck and
-      the ground normal, spread in wheel contact timing, and impact speed.
-      Clean / sketchy / bail thresholds are tuning values, with generous
-      defaults.
-- [ ] **Bail, stage 1**: when a bail is detected, slow motion for ~0.5 s,
-      a camera cut, then respawn at the last safe spot. (Basic recovery
-      already exists: standing up after a fall, by button or automatically.)
-- [ ] Coping behaviour: the quarter pipe lip must launch you straight up
-      and let you land back in, which is the classic hard case for
-      shape-cast wheels.
+- [x] Airborne detection: both wheels off for more than
+      `airborne_min_time` (0.12 s) counts as a jump. Air *control* starts
+      the moment both wheels leave; only the grading waits.
+- [x] **Air control, skate.-style.** Rate control rather than raw torque:
+      the stick sets a pitch rate (forward = nose down) and a spin rate;
+      a torque (capped, slider) drives the scooter toward it.
+  - Stick centred **holds the pitch** (hands on the bars) and lets any
+    spin you took off with carry on. So spin off a lip rewards takeoff;
+    pitch doesn't carry over, because the rider's arms hold it in reality
+    too.
+  - The rider keeps the scooter level in roll.
+  - All air torque is counted as work, so the energy audits still balance.
+- [x] **Landing assist**: within 0.3 s of the predicted touchdown (the
+      ballistic path is ray-cast ahead), if the scooter is within 60° of
+      lined up, it's rotated to meet the surface: up along the normal, deck
+      along the travel direction, forward or fakie.
+- [x] Landing grade, *after* the assist: tilt against the landing surface
+      and how sideways the deck is to the travel direction.
+      Clean < 15° / 20° sideways, bail > 35° / 50°. Wheel-timing spread and
+      impact speed aren't used yet, and weren't needed.
+- [x] **Bail, stage 1**: the rider lets go, the `bailed` signal fires, 0.6 s
+      of slow motion (0.3×), then the existing recovery stands you up where
+      you stopped. The camera cut waits for Phase 6. Respawning at the last
+      safe spot was dropped: standing up where you fell is what skate. does,
+      and it's less disorienting.
+- [x] Coping: airs out of a vertical-lipped quarter pipe land back in
+      (test: 0.31 m above the coping, clean, rides away fakie).
+
+**What we learned:**
+- **The legs pushed the scooter off the wall.** The leg force used to act
+  below the scooter's centre of mass, so every push pitched it. It now acts
+  *at* the centre of mass.
+- **The leg axis follows the ramp geometry, not the measured ground
+  force.** Following the force made a feedback loop that shook the rider
+  off vert. The axis now turns toward "gravity + centripetal" computed from
+  the ramp's normal and curvature (`Rider.follow_ramp`).
+- **"Fallen" on vert is relative to the ground.** The fallen check used
+  world up, so riding up a vertical wall counted as a fall. On the ground
+  it now measures tilt against the contact normal; in the air, only roll.
+- **The coping stuck out 4.5 cm** and caught the wheels. It's now 6 mm
+  proud, like real coping.
+- **The landing prediction started inside the wall** it had just left. It
+  now starts above the deck and ignores surfaces facing away.
+- **Pumping, done badly, throws you off the wall.** Extending all the way
+  up the transition fully stretches the legs near the top, which yanks the
+  scooter off the ramp. Extend through the lower transition, then hold.
+- **The park quarter pipe's 70° lip throws you onto the deck** unless you
+  spin. That's real (it's why riders do 180s on those ramps), but to air
+  straight back in, you need a vertical lip.
+- **Vert airs have to be pumped.** Rolling in passively, the knees soak up
+  the transition and you stall below the lip. Crouch on the way in, then
+  extend through the transition.
 
 **Exit criteria:**
-- Airs out of the quarter pipe land back in reliably when done well.
-- Kicker jumps land cleanly when done well and bail when done badly, and
-  the difference matches what you'd expect.
-- Nothing launches you wildly across the park (no physics explosions).
+- [x] Airs out of the quarter pipe land back in reliably when done well
+      (vert test).
+- [x] Kicker jumps land cleanly when done well and bail when done badly
+      (60° nose-high bails), and the difference matches what you'd expect.
+- [ ] Nothing launches you wildly across the park. The tests don't catch
+      anything, but this needs hands-on play to confirm.
+- [ ] Hands-on: does the assist feel fair rather than like autopilot?
 
 ### Phase 6 — Chase camera (S–M)
 **Goal:** a camera that makes the riding readable and feel fast.

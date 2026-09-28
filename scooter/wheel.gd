@@ -30,6 +30,8 @@ var rolling_dir := Vector3.FORWARD
 var surface_friction := 0.0
 var sliding := false
 var tangential_force := Vector3.ZERO
+## Total force (normal + tangential) this wheel applied this tick.
+var applied_force := Vector3.ZERO
 ## Speed along the rolling direction, m/s.
 var rolling_speed := 0.0
 ## Running total of work this wheel's forces have done on the body, J.
@@ -84,6 +86,7 @@ func simulate(body: Scooter, tuning: ScooterTuning, delta: float) -> void:
 		compression = 0.0
 		normal_force = 0.0
 		tangential_force = Vector3.ZERO
+		applied_force = Vector3.ZERO
 		_update_visual(0.0, delta)
 		return
 
@@ -151,6 +154,7 @@ func simulate(body: Scooter, tuning: ScooterTuning, delta: float) -> void:
 	tangential_force = rolling_dir * demand.x + lateral_dir * demand.y
 	var total := contact_normal * normal_force + tangential_force
 	body.add_tracked_force(total, contact_point)
+	applied_force = total
 	work_done += total.dot(v) * delta
 	_last_force = total
 	_last_local_point = body.global_transform.affine_inverse() * contact_point

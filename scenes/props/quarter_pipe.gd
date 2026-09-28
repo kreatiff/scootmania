@@ -61,8 +61,14 @@ func _profile() -> PackedVector2Array:
 func _steel_edges() -> Array[Dictionary]:
 	if not coping:
 		return []
-	# Coping sits slightly proud of the deck and sticks out past the face,
-	# as on a real ramp, so wheels and pegs meet steel first at the lip.
+	# Real coping stands just proud of the ramp face (a few mm) and just
+	# above the deck. Placed along the face's outward normal at the lip, so
+	# it's right for any lip angle, vert included.
 	var r := coping_diameter * 0.5
-	var at := lip() + Vector2(r * 0.5, -r * 0.6)
+	var l := lip()
+	var center_of_curve := Vector2(0.0, effective_radius())
+	var outward := (center_of_curve - l).normalized() # from the face into the air
+	var proud := 0.006
+	var at := l + outward * (proud - r)
+	at.y = height - r + 0.004
 	return [{"at": at, "shape": "round", "size": coping_diameter}]

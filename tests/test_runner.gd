@@ -39,6 +39,7 @@ func _ready() -> void:
 
 	await ScooterTests.new(self).run()
 	await PumpPopTests.new(self).run()
+	await AirTests.new(self).run()
 
 	stage = Stage.RECORDING
 	RiderInput.start_recording()

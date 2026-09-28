@@ -6,8 +6,9 @@ extends RigidBody3D
 ##
 ## The rider is joined to the scooter by two sets of forces, computed here
 ## each tick and applied equally and oppositely to both bodies:
-## - Legs: a spring-damper along the leg axis (the scooter's roll, but
-##   vertical in pitch). Muscles hold body
+## - Legs: a spring-damper along the leg axis, which follows the direction
+##   of the ground's push (vertical standing, along the lean in turns, into
+##   the ramp on transitions and vert). Muscles hold body
 ##   weight; the right stick sets leg length (crouch / extend), and the
 ##   spring absorbs whatever the ground does.
 ## - Hips: a stiffer spring holding the hips over the deck, at a sideways and
@@ -35,6 +36,9 @@ var hip_shift := Vector2.ZERO
 var work_done := 0.0
 ## True while crashed: the rider has let go and falls as a free body.
 var bailed := false
+## Direction the legs point, from the feet toward the hips (see
+## follow_support).
+var support_axis := Vector3.UP
 
 # What was applied last tick, to finish counting its work with the step's
 # average velocity (see ScooterWheel._finish_work). Scooter-side entries are
@@ -98,9 +102,6 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	else:
 		target_length = lerpf(stand, tuning.max_leg_length(), intent.pose.y)
 
-	# The leg axis follows the scooter's roll (you lean together) but stays
-	# vertical in pitch: when the scooter pitches up a ramp, the hips stay
-	# over the feet relative to gravity instead of swinging back with it.
 	var axis := leg_axis(scooter)
 	var right := scooter.global_basis.x
 	right = (right - axis * right.dot(axis)).normalized()
@@ -153,20 +154,29 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	var side := right * sideways_force
 	var fore := forward * fore_aft_force
 	apply_central_force(leg + side + fore)
-	scooter.add_tracked_force(-(leg + fore), feet)
+	# Legs and fore/aft hips push through the scooter's centre of mass: with
+	# both feet sharing the load, a rider's weight doesn't pry the deck
+	# round. (Applied at a single point on the deck below the centre of mass,
+	# a tilted leg force pitched the light scooter nose-up and lifted it off
+	# ramp walls.) The wheels then share the load by where that centre sits.
+	var com_velocity := scooter.linear_velocity
+	scooter.add_tracked_force(-(leg + fore), com)
 	scooter.add_tracked_force(-side, mast_point)
-	work_done += ((leg + side + fore).dot(linear_velocity) - (leg + fore).dot(feet_velocity)
+	work_done += ((leg + side + fore).dot(linear_velocity) - (leg + fore).dot(com_velocity)
 			- side.dot(mast_velocity)) * delta
 	var to_local := scooter.global_transform.affine_inverse()
 	_last_on_rider = leg + side + fore
 	_last_rider_velocity = linear_velocity
 	_last_on_scooter = [
-		[-(leg + fore), to_local * feet, feet_velocity],
+		[-(leg + fore), to_local * com, com_velocity],
 		[-side, to_local * mast_point, mast_velocity],
 	]
 
 	# Arms and ankles: damp the deck's pitch rate (the upper body doesn't
-	# rotate, so this is the pitch rate relative to the rider).
+	# rotate, so this is the pitch rate relative to the rider). On the ground
+	# only; in the air, AirControl holds or drives the pitch.
+	if not scooter.is_grounded():
+		return
 	var pitch_axis := scooter.global_basis.x
 	var pitch_torque := -pitch_axis * tuning.deck_pitch_damping * scooter.angular_velocity.dot(pitch_axis)
 	scooter.add_tracked_torque(pitch_torque)
@@ -201,18 +211,44 @@ static func _damping(stiffness: float, ratio: float, pair_mass: float) -> float:
 	return 2.0 * ratio * sqrt(stiffness * pair_mass)
 
 
-## Direction of the legs: the scooter's roll, but vertical in pitch.
-static func leg_axis(scooter: RigidBody3D) -> Vector3:
+## Direction of the legs: along the ground's push on the rider (see
+## follow_support). Kept within 70° of the deck's up, as a safety limit.
+func leg_axis(scooter: RigidBody3D) -> Vector3:
+	var up := scooter.global_basis.y
+	if support_axis.dot(up) < 0.34:
+		return up
+	return support_axis
+
+
+## A rider keeps their body along the push they get from the ground, or
+## they'd be tipped over by it. That push is gravity plus the centripetal
+## push of a curved ramp, so the axis is the scooter's roll (you lean
+## together) combined with the ramp's curvature at the current speed:
+## vertical on flat ground, tilted toward the ramp on a transition, into the
+## wall on vert at speed. It's computed from geometry, not from measured
+## forces: following the measured ground force feeds back on itself (the
+## rider's own lean tilts the force) and tips the rider over.
+## `normal` is the average contact normal, `curvature` 1/m (+ concave).
+## Only called with both wheels on the ground; in the air the axis stays.
+func follow_ramp(scooter: RigidBody3D, normal: Vector3, curvature: float, speed: float,
+		response: float, delta: float) -> void:
 	var right := scooter.global_basis.x
-	var axis := Vector3.UP - right * Vector3.UP.dot(right)
-	return axis.normalized() if axis.length_squared() > 1e-4 else scooter.global_basis.y
+	var level := Vector3.UP - right * Vector3.UP.dot(right)
+	level = level.normalized() if level.length_squared() > 1e-4 else scooter.global_basis.y
+	var push := level * Scooter.GRAVITY + normal * speed * speed * curvature
+	if push.length() < 1.0:
+		return # nearly weightless (over a crest): keep the current axis
+	# Normalised lerp, not slerp: slerp's internal rotation axis loses
+	# precision when the two directions are nearly parallel (most ticks).
+	support_axis = support_axis.lerp(push.normalized(), 1.0 - exp(-delta / response)).normalized()
 
 
 ## Puts the rider standing on the deck, at rest.
 func place_on(scooter: RigidBody3D, tuning: ScooterTuning) -> void:
 	var feet := feet_point(scooter, tuning)
 	# Standing length: muscles carry the weight, so there's no sag to add.
-	global_transform = Transform3D(Basis(), feet + leg_axis(scooter) * tuning.stand_leg_length())
+	support_axis = scooter.global_basis.y
+	global_transform = Transform3D(Basis(), feet + support_axis * tuning.stand_leg_length())
 	linear_velocity = scooter.linear_velocity
 	angular_velocity = Vector3.ZERO
 	bailed = false

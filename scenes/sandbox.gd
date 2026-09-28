@@ -9,7 +9,13 @@ extends Node3D
 @onready var _fly: FlyCamera = $FlyCamera
 
 
+var _slow_motion := SlowMotion.new()
+
+
 func _ready() -> void:
+	add_child(_slow_motion)
+	_scooter.bailed.connect(func() -> void:
+		_slow_motion.play(_scooter.tuning.bail_slowmo_scale, _scooter.tuning.bail_slowmo_time))
 	_tuning_panel.bind(_scooter.tuning, "Scooter")
 	_tuning_panel.bind(RiderInput.tuning, "Input")
 	_chase.make_current()
