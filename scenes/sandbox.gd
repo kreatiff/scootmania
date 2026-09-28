@@ -1,22 +1,38 @@
 extends Node3D
-## The test world. In Phase 0 it only hosts the debug tools and draws the
-## rider intent in 3D, to prove input and DebugDraw work end to end.
+## The test world: the park, debug tools and cameras. Until the scooter
+## exists (Phase 2), the rider intent is drawn at the spawn point.
 
 @onready var _tuning_panel: TuningPanel = $TuningPanel
+@onready var _spawn: Marker3D = $Spawn
+@onready var _overview: Camera3D = $OverviewCamera
+@onready var _fly: FlyCamera = $FlyCamera
 
 
 func _ready() -> void:
 	_tuning_panel.bind(RiderInput.tuning, "Input")
+	_overview.make_current()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("reset"):
 		get_tree().reload_current_scene()
+	elif event.is_action_pressed("debug_camera"):
+		_toggle_fly_camera()
+
+
+func _toggle_fly_camera() -> void:
+	if _fly.current:
+		_overview.make_current()
+	else:
+		_fly.copy_view(get_viewport().get_camera_3d())
+		_fly.make_current()
 
 
 func _physics_process(_delta: float) -> void:
+	if _fly.current:
+		return # the sticks are flying the camera, not riding
 	var intent := RiderInput.intent
-	var origin := Vector3(0, 0.02, 0)
+	var origin := _spawn.global_position + Vector3(0, 0.02, 0)
 	DebugDraw.axes(Transform3D(Basis(), origin), 0.5)
 	# Lean: stick forward points down -Z, Godot's forward.
 	DebugDraw.arrow(origin, Vector3(intent.lean.x, 0, -intent.lean.y), Color.AQUA)

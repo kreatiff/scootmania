@@ -10,7 +10,7 @@ extends Node3D
 const TEST_REPLAY := "user://replays/test.replay"
 const RECORD_TICKS := 240
 
-enum Stage { UNIT, RECORDING, PLAYBACK }
+enum Stage { UNIT, PROPS, RECORDING, PLAYBACK }
 
 static var stage := Stage.UNIT
 static var failures := 0
@@ -19,6 +19,7 @@ static var played_intents: Array[PackedFloat64Array] = []
 static var recorded_final := Transform3D()
 
 var _tick := 0
+var _park: Node3D
 
 @onready var _body: RigidBody3D = $Body
 
@@ -27,8 +28,10 @@ func _ready() -> void:
 	match stage:
 		Stage.UNIT:
 			_run_unit_tests()
-			stage = Stage.RECORDING
-			RiderInput.start_recording()
+			# Colliders only exist in the physics space after a tick.
+			_park = preload("res://scenes/park.tscn").instantiate()
+			add_child(_park)
+			stage = Stage.PROPS
 		Stage.PLAYBACK:
 			pass
 
@@ -41,6 +44,14 @@ func _physics_process(_delta: float) -> void:
 		_body.apply_central_impulse(Vector3.UP * 2.0)
 
 	match stage:
+		Stage.PROPS:
+			_tick += 1
+			if _tick == 2:
+				_run_prop_tests()
+				_park.queue_free()
+				_tick = 0
+				stage = Stage.RECORDING
+				RiderInput.start_recording()
 		Stage.RECORDING:
 			if RiderInput.mode != RiderInput.Mode.RECORDING:
 				return
@@ -127,6 +138,65 @@ func _run_unit_tests() -> void:
 	var frames := PackedFloat64Array([0.1, 0.2, 0.3, 0.4, 0.5, 1.0])
 	check(RiderInput.save_replay(TEST_REPLAY, frames) == OK, "replay file written")
 	check(RiderInput.load_replay(TEST_REPLAY) == frames, "replay file round trip")
+
+
+## Every prop's collider must match the geometry it was built from: rays
+## cast down across each prop must hit at the profile's height, on the
+## right material. A wrongly wound collider (invisible from above) fails.
+func _run_prop_tests() -> void:
+	var props := 0
+	for prop in _park.get_children():
+		if prop is ProfileProp:
+			props += 1
+			_check_profile_prop(prop)
+		elif prop is Rail:
+			props += 1
+			var top: Vector3 = prop.to_global(Vector3(0.5, prop.height, 0))
+			var hit := _ray_down(top)
+			check(not hit.is_empty() and absf(hit["position"].y - prop.height) < 0.005
+					and _is_steel(hit), "%s: steel rail top at %.2f m" % [prop.name, prop.height])
+	check(props == 7, "park has 7 props (found %d)" % props)
+
+
+func _check_profile_prop(prop: ProfileProp) -> void:
+	var zr := prop.z_range()
+	var misses: Array[String] = []
+	var coping_z := NAN
+	if prop is QuarterPipe and prop.coping:
+		coping_z = prop.lip().x
+	for f in [0.1, 0.3, 0.5, 0.7, 0.9]:
+		var z := lerpf(zr.x, zr.y, f)
+		if not is_nan(coping_z) and absf(z - coping_z) < 0.1:
+			continue
+		var expected := prop.top_height(z)
+		for x_frac in [-0.4, 0.0, 0.4]:
+			var hit := _ray_down(prop.to_global(Vector3(prop.width * x_frac, expected, z)))
+			var ok: bool = not hit.is_empty() and absf(hit["position"].y - expected) < 0.005 \
+					and hit["collider"] == prop
+			if not ok:
+				misses.append("z=%.2f x=%.1f expected %.3f got %s" % [z, x_frac,
+						expected, "nothing" if hit.is_empty() else "%.3f on %s" % [hit["position"].y, hit["collider"].name]])
+	check(misses.is_empty(), "%s: collider matches profile%s" % [prop.name,
+			"" if misses.is_empty() else "\n      " + "\n      ".join(misses)])
+	check(prop.physics_material_override == PropMaterials.CONCRETE, "%s: concrete" % prop.name)
+
+	for edge in prop._steel_edges():
+		var at: Vector2 = edge["at"]
+		var top: float = at.y + edge["size"] * 0.5
+		var hit := _ray_down(prop.to_global(Vector3(0, top, at.x)))
+		check(not hit.is_empty() and absf(hit["position"].y - top) < 0.005 and _is_steel(hit),
+				"%s: steel edge on top at %.3f m" % [prop.name, top])
+
+
+func _ray_down(point: Vector3) -> Dictionary:
+	var query := PhysicsRayQueryParameters3D.create(point + Vector3.UP * 2.0, point + Vector3.DOWN * 2.0)
+	return get_world_3d().direct_space_state.intersect_ray(query)
+
+
+static func _is_steel(hit: Dictionary) -> bool:
+	var body := hit["collider"] as StaticBody3D
+	return body != null and body.physics_material_override == PropMaterials.STEEL \
+			and body.collision_layer & PropMaterials.LAYER_GRINDABLE != 0
 
 
 func check(condition: bool, description: String) -> void:

@@ -159,21 +159,23 @@ smoothly. A recorded input file plays back exactly.
 
 ### Phase 1 — Sandbox world (S)
 **Goal:** a place to ride that makes speed and angles readable.
-- [ ] Large flat ground with a **grid texture** of 1 m squares. Without it,
+- [x] Large flat ground with a **grid texture** of 1 m squares. Without it,
       you can't perceive speed.
-- [ ] Props built from CSG or simple meshes, all at real skatepark sizes:
-  - [ ] Flat bank (~20°)
-  - [ ] Kicker ramp (~0.5 m tall)
-  - [ ] Quarter pipe (~1.2 m radius, with metal coping on the lip)
-  - [ ] Two quarter pipes facing each other (mini ramp) for pumping tests
-  - [ ] Flat box / manual pad (~0.3 m tall)
-  - [ ] Round rail (for grind tests later; it only needs a collider now)
-- [ ] Physics materials: concrete (high friction) and steel coping (low
+- [x] Props generated from parameters (profile → mesh + matching collider),
+      all at real skatepark sizes:
+  - [x] Flat bank (~20°)
+  - [x] Kicker ramp (~0.5 m tall)
+  - [x] Quarter pipe (1.2 m tall on a 1.8 m radius, with steel coping on the lip)
+  - [x] Two quarter pipes facing each other (mini ramp) for pumping tests
+  - [x] Flat box / manual pad (~0.3 m tall)
+  - [x] Round rail (for grind tests later; it only needs a collider now)
+- [x] Physics materials: concrete (high friction) and steel coping (low
       friction).
-- [ ] A simple fixed camera plus a free-fly debug camera.
+- [x] A simple fixed camera plus a free-fly debug camera.
 
 **Exit criteria:** you can fly around the park, and every prop has a correct
-collider (checked with *Debug → Visible Collision Shapes*).
+collider (checked with *Debug → Visible Collision Shapes*, and automatically
+by the ray-cast test in `tests/`).
 
 ### Phase 2 — The rolling scooter, no rider (M)
 **Goal:** a scooter-shaped rigid body that rolls, coasts and grips like

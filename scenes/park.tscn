@@ -1,0 +1,42 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/props/kicker.gd" id="1_r2x14"]
+[ext_resource type="Script" path="res://scenes/props/quarter_pipe.gd" id="2_qbwbv"]
+[ext_resource type="Script" path="res://scenes/props/bank.gd" id="3_v6yfi"]
+[ext_resource type="Script" path="res://scenes/props/manual_pad.gd" id="4_v4b5n"]
+[ext_resource type="Script" path="res://scenes/props/rail.gd" id="5_cowak"]
+
+[node name="Park" type="Node3D" unique_id=2138914486]
+
+[node name="Kicker" type="StaticBody3D" parent="." unique_id=204700065]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -8)
+script = ExtResource("1_r2x14")
+
+[node name="QuarterPipe" type="StaticBody3D" parent="." unique_id=285877310]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0, -12)
+script = ExtResource("2_qbwbv")
+width = 5.0
+
+[node name="MiniRampA" type="StaticBody3D" parent="." unique_id=1278787964]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0, -12)
+script = ExtResource("2_qbwbv")
+height = 0.9
+deck_length = 1.0
+
+[node name="MiniRampB" type="StaticBody3D" parent="." unique_id=822249158]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -9, 0, -9.5)
+script = ExtResource("2_qbwbv")
+height = 0.9
+deck_length = 1.0
+
+[node name="Bank" type="StaticBody3D" parent="." unique_id=1961906306]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 8, 0, 2)
+script = ExtResource("3_v6yfi")
+
+[node name="ManualPad" type="StaticBody3D" parent="." unique_id=1999449646]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -4, 0, -2)
+script = ExtResource("4_v4b5n")
+
+[node name="Rail" type="StaticBody3D" parent="." unique_id=1121941129]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 4, 0, -2)
+script = ExtResource("5_cowak")

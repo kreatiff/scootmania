@@ -19,12 +19,33 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 | Kick | A / Cross | Space |
 | Reset | Start | R |
 | Tuning panel | Back / Select | Tab |
+| Fly camera on/off | D-pad up | F2 |
+| Fly camera move / look | Left / right stick | WASD / hold right mouse |
+| Fly camera down / up | LB / RB | Q / E (wheel: speed) |
 | Debug lines on/off | — | F3 |
 | Record input / stop | — | F5 (in game) |
 | Replay last recording | — | F6 (in game) |
 
 When running from the editor, F5/F6 are also editor shortcuts, but they go
 to the game while the game window has focus.
+
+## The park
+
+`scenes/park.tscn` holds the props, all at real skatepark sizes. Each prop
+is generated from a few parameters (height, radius, angle…), so select one
+in the editor and change it in the Inspector: the mesh *and* the collider
+rebuild together. Concrete and steel are separate bodies, because Godot
+sets friction per body. Coping, rails and box edges are also on collision
+layer 2 ("grindable").
+
+| Prop | Size |
+|---|---|
+| Kicker | 0.5 m tall, 33° lip |
+| Quarter pipe | 1.2 m tall on a 1.8 m radius, 60 mm coping |
+| Mini ramp | two 0.9 m quarter pipes, 2.5 m flat bottom |
+| Bank | 1.0 m at 20° |
+| Manual pad | 0.3 m tall, 4 m long, steel edges |
+| Rail | 0.35 m tall, 50 mm round |
 
 ## Debug tools
 
@@ -47,5 +68,9 @@ to the game while the game window has focus.
 godot --headless --path . res://tests/test_runner.tscn
 ```
 
-Exits with 0 on success. It includes an end-to-end check that a recorded
-replay drives a rigid body to the *identical* final transform.
+Exits with 0 on success. It includes:
+- an end-to-end check that a recorded replay drives a rigid body to the
+  *identical* final transform;
+- a collider check that casts rays down across every park prop and
+  compares each hit with the height the prop's own profile predicts,
+  including steel versus concrete.
