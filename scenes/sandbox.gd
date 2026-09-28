@@ -9,16 +9,31 @@ extends Node3D
 @onready var _fly: FlyCamera = $FlyCamera
 
 
+## The first landing of each trick plays in slow motion, as a reward.
+const FIRST_TRICK_SLOWMO_SCALE := 0.4
+const FIRST_TRICK_SLOWMO_TIME := 0.7
+
 var _slow_motion := SlowMotion.new()
+var _trick_hud := TrickHud.new()
+var _tricks_landed := {}
 
 
 func _ready() -> void:
 	add_child(_slow_motion)
 	_scooter.bailed.connect(func() -> void:
 		_slow_motion.play(_scooter.tuning.bail_slowmo_scale, _scooter.tuning.bail_slowmo_time))
+	$Hud.add_child(_trick_hud)
+	_scooter.trick_finished.connect(_on_trick_finished)
 	_tuning_panel.bind(_scooter.tuning, "Scooter")
 	_tuning_panel.bind(RiderInput.tuning, "Input")
 	_chase.make_current()
+
+
+func _on_trick_finished(result: String, landed: bool) -> void:
+	_trick_hud.show_result(result, landed)
+	if landed and not _tricks_landed.has(result):
+		_tricks_landed[result] = true
+		_slow_motion.play(FIRST_TRICK_SLOWMO_SCALE, FIRST_TRICK_SLOWMO_TIME)
 
 
 func _unhandled_input(event: InputEvent) -> void:

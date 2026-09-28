@@ -182,6 +182,20 @@ extends Resource
 @export_range(0.05, 1.0, 0.05) var bail_slowmo_scale := 0.3
 @export_range(0.0, 3.0, 0.1, "suffix:s") var bail_slowmo_time := 0.6
 
+@export_group("Tricks")
+## Time for a whole barspin / tailwhip. Longer needs more air.
+@export_range(0.15, 1.0, 0.01, "suffix:s") var barspin_time := 0.35
+@export_range(0.15, 1.0, 0.01, "suffix:s") var tailwhip_time := 0.45
+## Landing with this much of the spin left (as it looks: the spin eases
+## out) still counts: it snaps round. 25° is reached ~70% of the way
+## through the trick's time.
+@export_range(0.0, 120.0, 1.0, "suffix:°") var trick_grace_deg := 25.0
+## A flick: the right stick from inside flick_centre to past flick_edge
+## within flick_max_time.
+@export_range(0.05, 0.6, 0.01) var flick_centre := 0.3
+@export_range(0.5, 1.0, 0.01) var flick_edge := 0.85
+@export_range(0.03, 0.5, 0.01, "suffix:s") var flick_max_time := 0.15
+
 @export_group("Recovery")
 ## Tipped further than this counts as fallen.
 @export_range(30.0, 90.0, 1.0, "suffix:°") var fallen_angle_deg := 60.0

@@ -125,8 +125,9 @@ scootmania/
 | Left stick X | Lean → steer (body weight) | Body lean / spin input |
 | Left stick Y | Weight forward/back | Pitch (nose up/down) |
 | Right stick Y | Down = compress/pump, flick up = pop | Tuck / extend |
-| Right stick flick | — | Tricks (Phase 7+) |
+| Right stick flick | — | Sideways: tailwhip. Up/down: barspin |
 | Right trigger | Rear brake (fender brake) | — |
+| Left trigger | Foot plant (tight turns) | — |
 | A / Cross | Kick (foot push) | — |
 | Start | Reset to spawn | Reset to spawn |
 | Select / Back | Toggle tuning panel | Toggle tuning panel |
@@ -400,7 +401,9 @@ Changes:
   in airborne ticks. The pumping audit now only fails on energy *created*,
   and reports the loss.
 
-### Phase 6 — Chase camera (S–M)
+### Phase 6 — Chase camera (S–M) — accepted as is
+The basic chase camera from Phase 1 felt fine in play, so this phase is
+parked. Revisit if big airs or vert make the camera hard to read.
 **Goal:** a camera that makes the riding readable and feel fast.
 - [ ] Follow with a spring (position lag) and look-ahead in the direction
       of travel.
@@ -415,30 +418,41 @@ Changes:
 **Exit criteria:** a full session of riding with no moment where the
 camera hides the landing or makes you feel sick.
 
-### Phase 7 — First tricks (M)
+### Phase 7 — First tricks (M) ✅
 **Goal:** barspins and tailwhips that feel as achievable as skate.'s flip
 tricks.
-- [ ] Split the scooter *visuals* into deck and bars+fork+front wheel nodes,
-      pivoting about the real headtube axis. The physics body is unchanged.
-- [ ] **Flick recognition** on the right stick: direction + speed,
-      with generous tolerances (skate.'s flicks are forgiving). Show the
-      recognised gesture on the debug HUD so tolerances can be tuned.
-- [ ] **Trick playback**: once triggered, the part rotates 360° along a
-      tuned curve (quick start, smooth settle) over a fixed duration.
-      There's no mid-trick physics to fight.
-- [ ] **Barspin**: the bars rotate. **Tailwhip**: the deck rotates around
-      the headtube axis while the rider holds the bars.
-- [ ] **Where the skill is**: the trick needs airtime. If you land before
-      it finishes, you bail. So the skill is in the pop and the timing,
-      exactly like skate.
-- [ ] **Feedback**: a clear "too early / landed / bailed" read. Optional
-      slow-mo on the first land of a new trick.
-- [ ] Trick duration, flick tolerance and the "almost finished" grace
-      window are all sliders.
+- [x] Scooter visuals split into the bars assembly (stem, bars, front
+      wheel) and the deck (with the rear wheel), both pivoting about the
+      real headtube axis, which meets the front axle. The physics body is
+      unchanged.
+- [x] **Flick recognition** on the right stick: from inside 0.3 to past 0.85
+      within 0.15 s. Holding it out doesn't repeat; it re-arms back at the
+      centre. The last flick shows on the debug HUD.
+- [x] **Trick playback**: a 360° turn along an ease-out curve (quick start,
+      smooth settle). Tailwhip 0.45 s, barspin 0.35 s. No physics during
+      the trick.
+- [x] **Barspin** (flick up/down) and **tailwhip** (flick sideways, feet
+      tucked up while the deck goes round). Tricks chain: flick again once
+      one finishes.
+- [x] **Where the skill is**: land with more than 25° of the spin still to
+      go (as it looks) and you bail, "too early". That's about 70% of the
+      trick's time, so a tailwhip needs ~0.32 s of air after the flick.
+- [x] **Feedback**: a callout at the top of the screen (green when landed,
+      red with the reason when not), and slow motion the first time you
+      land each trick.
+- [x] Trick durations, grace angle and flick thresholds are sliders.
 
-**Exit criteria:** after a few minutes of practice, a new player can land a
-barspin and a tailwhip off the kicker. Failures read as *their* mistake
-(not enough air, bad landing), never as the game's.
+**What we learned:**
+- **Grace has to be judged by what the player sees.** The first version
+  measured the grace in *time* left. With the ease-out, the spin looks
+  nearly done well before the time runs out, so the rule didn't match the
+  screen.
+
+**Exit criteria:**
+- [ ] Hands-on: after a few minutes of practice, a new player lands a
+      barspin and a tailwhip off the kicker, and failures read as their
+      mistake. (Tests: both land when flicked after the pop, and a late
+      flick bails.)
 
 ---
 

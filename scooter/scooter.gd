@@ -25,6 +25,9 @@ extends RigidBody3D
 signal landed(grade: int)
 ## The rider let go: a crash or a bailed landing.
 signal bailed
+## An air with tricks ended: e.g. "TAILWHIP + BARSPIN", and whether it was
+## landed or the result says why not ("BARSPIN — too early").
+signal trick_finished(result: String, landed: bool)
 
 ## Scooter collision sits on its own layer and only hits the world.
 const LAYER_SCOOTER := 4
@@ -51,6 +54,7 @@ var assist_work := 0.0
 var air_work := 0.0
 var air := AirControl.new()
 var foot := FootPlant.new()
+var tricks := Tricks.new()
 var _last_assist_force := Vector3.ZERO
 var _last_assist_velocity := Vector3.ZERO
 ## How long the scooter has been tipped past fallen_angle_deg, s.
@@ -68,6 +72,7 @@ var rider := Rider.new()
 var _push_time_left := 0.0
 var _kick_was_down := false
 var _steering_visual := Node3D.new()
+var _deck_visual := Node3D.new()
 var _last_surface_grip := 0.9
 var _leg_visual := MeshInstance3D.new()
 var _foot_visual := MeshInstance3D.new()
@@ -137,13 +142,19 @@ func _physics_process(delta: float) -> void:
 	if front_wheel.in_contact and rear_wheel.in_contact:
 		rider.follow_ramp(self, _ramp_normal(), _ramp_curvature(), speed, tuning.leg_axis_response, delta)
 	var landing := air.update(self, tuning, intent, delta)
+	if tricks.update(self, tuning, intent, delta):
+		landing = AirControl.Landing.BAIL # came down mid-trick
+		air.last_landing = landing
+	if landing == AirControl.Landing.BAIL:
+		tricks.fail_landing()
+	if tricks.just_resolved:
+		trick_finished.emit(tricks.last_result, tricks.last_landed)
 	if landing != AirControl.Landing.NONE:
 		landed.emit(landing)
 		if landing == AirControl.Landing.BAIL:
 			bail()
 
-	_steering_visual.rotation = Vector3.ZERO
-	_steering_visual.rotate_object_local(tuning.headtube_axis().normalized(), -steer_angle)
+	_update_trick_visuals()
 	_draw_debug(speed)
 
 
@@ -300,6 +311,8 @@ func _place(ground: Vector3, up: Vector3, heading: Vector3) -> void:
 	_push_time_left = 0.0
 	front_wheel.sliding = false
 	rear_wheel.sliding = false
+	tricks.clear()
+	_update_trick_visuals()
 	DebugDraw.watches.erase("fallen")
 	reset_physics_interpolation()
 	rider.place_on(self, tuning)
@@ -450,6 +463,19 @@ func _apply_balance_torque(speed: float) -> void:
 	_last_assist_velocity = rider.linear_velocity
 
 
+## Steering and tricks turn parts of the scooter about the headtube, which
+## meets the front axle: the bars (and front wheel) for steering and
+## barspins, the deck (and rear wheel) for tailwhips. Visual only.
+func _update_trick_visuals() -> void:
+	var axis := tuning.headtube_axis().normalized()
+	var pivot := Vector3(0, tuning.wheel_radius, -tuning.wheelbase * 0.5)
+	_steering_visual.transform = Tricks.pivot_transform(tricks.bars_angle - steer_angle, axis, pivot) \
+			* Transform3D(Basis(), pivot)
+	front_wheel.visual_pivot = Tricks.pivot_transform(tricks.bars_angle, axis, pivot)
+	_deck_visual.transform = Tricks.pivot_transform(tricks.deck_angle, axis, pivot)
+	rear_wheel.visual_pivot = _deck_visual.transform
+
+
 ## Average of the wheels' contact normals, within the pitch plane.
 func _ramp_normal() -> Vector3:
 	var right := global_basis.x
@@ -525,6 +551,10 @@ func _draw_debug(speed: float) -> void:
 	if air.last_landing != AirControl.Landing.NONE:
 		DebugDraw.watch("landing", "%s  (tilt %.0f°, sideways %.0f°)" % [
 				AirControl.landing_name(air.last_landing), rad_to_deg(air.last_tilt), rad_to_deg(air.last_sideways)])
+	var flick := "flick %s %.1f s ago" % [tricks.last_flick, tricks.last_flick_age] if tricks.last_flick_age < 5.0 else "no flick"
+	DebugDraw.watch("tricks", "%s   %s   last: %s" % [
+			"%s %.0f%%" % [Tricks.trick_name(tricks.active), tricks.progress * 100.0] if tricks.active != Tricks.Trick.NONE else "—",
+			flick, tricks.last_result])
 	DebugDraw.watch("foot", "HELD (scuffing, full lock)" if foot.held else ("down (standing)" if foot.planted else "on the deck"))
 	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
 			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])
@@ -566,7 +596,8 @@ func _build() -> void:
 
 	var deck_mesh := BoxMesh.new()
 	deck_mesh.size = deck_size
-	_add_mesh(self, deck_mesh, accent, Transform3D(Basis(), deck_center))
+	add_child(_deck_visual)
+	_add_mesh(_deck_visual, deck_mesh, accent, Transform3D(Basis(), deck_center))
 
 	# Steering assembly pivots about the headtube, at the front of the deck.
 	var axis := tuning.headtube_axis().normalized()
@@ -635,7 +666,10 @@ func _build_rider_visuals() -> void:
 
 
 func _process(_delta: float) -> void:
-	var feet := get_global_transform_interpolated() * Vector3(0, tuning.deck_top, tuning.rider_com_offset)
+	var feet_local := Vector3(0, tuning.deck_top, tuning.rider_com_offset)
+	if tricks.active == Tricks.Trick.TAILWHIP:
+		feet_local.y += 0.18 # feet tucked up while the deck whips round
+	var feet := get_global_transform_interpolated() * feet_local
 	var hips := rider.get_global_transform_interpolated().origin
 	_place_limb(_leg_visual, feet, hips)
 	_foot_visual.visible = foot.planted

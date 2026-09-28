@@ -15,6 +15,7 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 |---|---|---|
 | Lean (steers) / in the air: pitch and spin | Left stick | WASD |
 | Crouch / extend (pop, pump) | Right stick down / up | Arrow keys |
+| Tricks (in the air) | Right stick flick: sideways = tailwhip, up/down = barspin | Arrow keys (tap) |
 | Rear brake | Right trigger | Shift |
 | Foot plant (tight turns, stop) | Left trigger (hold) | Ctrl |
 | Kick | A / Cross | Space |
@@ -100,6 +101,16 @@ transition. Rolling in passively, your knees soak up the ramp and you stall
 below the lip. The park's quarter pipe has a 70° lip, which throws you onto
 the deck unless you spin around.
 
+**Tricks.** In the air, flick the right stick: sideways for a
+**tailwhip** (the deck whips around the bars), up or down for a
+**barspin** (the bars spin around). A flick is a quick move from the
+centre to the edge; pushing the stick slowly doesn't count. The trick then
+plays by itself, taking 0.45 s (tailwhip) or 0.35 s (barspin). Land before
+it's nearly round and you bail ("too early"). So the skill is getting
+enough air (pop!) and flicking early. Once one trick finishes, flick again
+to chain another. The result shows at the top of the screen, and the first
+time you land each trick plays in slow motion.
+
 **Falling over:** tipped past 60° (or hung up: wheels off the ground and
 stopped), the rider lets go. After 1.5 s the
 scooter stands itself up where it came to rest (the delay is a slider;
@@ -151,6 +162,9 @@ instead of in real time. Exits with 0 on success. It includes:
 - turning: full stick at every speed from 0.5 to 8 m/s never falls or
   slides; the foot plant turns in less than 60% of the carving radius at
   walking pace, scuffs at the expected rate, and blocks kicking;
+- tricks: flick recognition (quick flicks count once; slow pushes don't),
+  a tailwhip and a barspin off the kicker land, a late flick bails, a
+  flick on the ground does nothing;
 - airs: kicker landings with and without the assist, air control (pitch
   hold, nose down, spin), a bad landing that bails and recovers, an air
   back into a vert quarter pipe, and slow motion.

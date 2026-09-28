@@ -19,6 +19,9 @@ var is_front := false
 ## Steering angle in radians, + is right. Only used on the front wheel.
 var steer_angle := 0.0
 var brake := 0.0
+## Extra visual-only rotation in the scooter's frame (a barspin or tailwhip
+## swinging this wheel about the headtube). The physics ignore it.
+var visual_pivot := Transform3D.IDENTITY
 
 # State from the last simulate(), for debug drawing, telemetry and tests.
 var in_contact := false
@@ -233,12 +236,13 @@ func _surface_friction() -> float:
 
 
 func _update_visual(shown_compression: float, delta: float) -> void:
-	_visual.position = Vector3(0, shown_compression, 0)
-	_visual.rotation = Vector3.ZERO
+	var local := Transform3D(Basis(), Vector3(0, shown_compression, 0))
 	if is_front:
 		# Visual steering; the tiny tilt from the headtube angle is ignored.
-		_visual.rotate_y(-steer_angle)
+		local = local.rotated_local(Vector3.UP, -steer_angle)
 	var radius := _sphere.radius
 	if in_contact and radius > 0.0:
 		_spin -= rolling_speed / radius * delta
-	_visual.rotate_object_local(Vector3.RIGHT, _spin)
+	local = local.rotated_local(Vector3.RIGHT, _spin)
+	# The pivot is in the scooter's frame; this node sits at `transform`.
+	_visual.transform = transform.affine_inverse() * visual_pivot * transform * local
