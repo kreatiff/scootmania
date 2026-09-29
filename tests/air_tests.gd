@@ -89,12 +89,12 @@ func _air_rotation(kicker: Kicker, stick: Vector2) -> Array:
 	return [pitch_change, yaw_change]
 
 
-## Dropped nose-high from a metre up, too far out for the assist to save:
+## Dropped 75° nose-high from a metre up, past the assist's 60° reach:
 ## a bail. The rider lets go, and recovery stands the scooter back up.
 func _test_bad_landing_bails() -> void:
 	var at := Vector3(-100, 1.0, -140)
 	var s := _spawn(at, 0.0)
-	s.global_transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(60.0)), at)
+	s.global_transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(75.0)), at)
 	s.rider.place_on(s, tuning)
 	var bail_signals := [0]
 	s.bailed.connect(func() -> void: bail_signals[0] += 1)
@@ -105,7 +105,7 @@ func _test_bad_landing_bails() -> void:
 			grade = s.air.last_landing
 			break
 	_check(grade == AirControl.Landing.BAIL,
-			"bail: 60° nose-high landing bails (%s, %.0f°)" % [AirControl.landing_name(grade), rad_to_deg(s.air.last_tilt)])
+			"bail: 75° nose-high landing bails (%s, %.0f°)" % [AirControl.landing_name(grade), rad_to_deg(s.air.last_tilt)])
 	_check(bail_signals[0] == 1 and s.rider.bailed, "bail: the rider lets go (signal sent once)")
 	var got_up := false
 	for i in int((tuning.auto_recover_delay + 1.5) * tps):
@@ -134,21 +134,29 @@ func _test_air_back_in() -> void:
 	var grades: Array[int] = []
 	s.landed.connect(func(grade: int) -> void: grades.append(grade))
 	var apex := 0.0
+	var away := NAN # fakie speed half a second after the first landing
+	var landed_at := -1
+	var landings_before := 0
 	s.manual_intent.pose = Vector2(0, -1)
 	for i in tps * 5:
 		await _ticks(1)
 		apex = maxf(apex, s.global_position.y - qp.height)
+		if apex < 0.2:
+			landings_before = grades.size()
+		if landed_at < 0 and apex > 0.2 and grades.size() > landings_before:
+			landed_at = i
+		if landed_at >= 0 and i == landed_at + tps / 2:
+			away = s.linear_velocity.z
 		# Extend while on the transition, going up.
 		if s.is_grounded() and s.global_position.z < qp.position.z and s.linear_velocity.y > 0.0:
-			s.manual_intent.pose = Vector2(0, 0.5)
+			s.manual_intent.pose = Vector2(0, 0.45) # just under a pop
 		elif s.air.airborne:
 			s.manual_intent.pose = Vector2.ZERO
 	var bails := grades.count(AirControl.Landing.BAIL)
 	runner.note("air back in: %.2f m above the coping, landings %s" % [apex, grades.map(AirControl.landing_name)])
 	_check(apex > 0.2, "air back in: gets %.2f m above the coping" % apex)
 	_check(bails == 0 and not s.rider.bailed, "air back in: lands back in without bailing")
-	_check(s.global_position.z > qp.position.z and s.linear_velocity.z > 1.0,
-			"air back in: rides away fakie (%.1f m/s)" % s.linear_velocity.z)
+	_check(away > 1.0, "air back in: rides away fakie (%.1f m/s half a second after landing)" % away)
 	s.queue_free()
 	qp.queue_free()
 

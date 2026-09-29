@@ -108,6 +108,9 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 		target_length = lerpf(stand, stand - tuning.crouch_depth, -intent.pose.y)
 	else:
 		target_length = lerpf(stand, tuning.max_leg_length(), intent.pose.y)
+	if scooter.pop.tuck_left > 0.0:
+		# Tucked up after a pop (never longer than a crouch you're holding).
+		target_length = minf(target_length, stand - tuning.crouch_depth * 0.8)
 
 	var axis := leg_axis(scooter)
 	var right := scooter.global_basis.x
@@ -125,7 +128,12 @@ func simulate(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent,
 	# spring toward the chosen length; the joints stop the leg at its limits.
 	var leg_mass := _pair_mass(scooter, feet - com, axis)
 	var extension_speed := (linear_velocity - feet_velocity).dot(axis)
-	var muscle := mass * Scooter.GRAVITY * maxf(axis.y, 0.0) \
+	# The weight share only while something holds the scooter up: in the air
+	# there's no weight to carry, and pushing it anyway shoved the scooter
+	# away from the rider (a pop off a rail fell straight back onto it).
+	var supported := scooter.is_grounded() or scooter.grind.active
+	var carried := mass * Scooter.GRAVITY * maxf(axis.y, 0.0) if supported else 0.0
+	var muscle := carried \
 			+ tuning.leg_stiffness * (target_length - leg_length) \
 			- _damping(tuning.leg_stiffness, tuning.leg_damping_ratio, leg_mass) * extension_speed
 	muscle = clampf(muscle, -tuning.leg_max_pull, tuning.leg_max_push)

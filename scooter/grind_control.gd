@@ -18,6 +18,8 @@ extends RefCounted
 ## The wheels hover while grinding (on a real scooter they overhang).
 
 var active := false
+## Why the last grind ended: "end", "popped", "lifted", "stopped", "bailed".
+var end_reason := ""
 ## Seconds into the current grind.
 var time := 0.0
 ## Support force from the edge this tick, N.
@@ -49,6 +51,8 @@ func update(scooter: Scooter, tuning: ScooterTuning, delta: float) -> bool:
 	_finish_work(scooter, delta)
 	_cooldown -= delta
 	if scooter.rider.bailed:
+		if active:
+			end_reason = "bailed"
 		_release()
 		return false
 	if not active and not _catch(scooter, tuning):
@@ -56,7 +60,12 @@ func update(scooter: Scooter, tuning: ScooterTuning, delta: float) -> bool:
 
 	var hit := _closest_on_deck(scooter, _a, _b)
 	var t: float = hit[2]
-	if t <= 0.0 or t >= 1.0:
+	# Off the end you're heading for (the one you came on at may still be
+	# under the deck's middle just after catching).
+	var heading_to_b := scooter.linear_velocity.dot(_b - _a) >= 0.0
+	var margin := tuning.grind_catch_before / (_b - _a).length() + 0.05
+	if (heading_to_b and t >= 1.0) or (not heading_to_b and t <= 0.0) or t < -margin or t > 1.0 + margin:
+		end_reason = "end"
 		_release() # off the end
 		return false
 	var p: Vector3 = hit[0]
@@ -86,12 +95,14 @@ func update(scooter: Scooter, tuning: ScooterTuning, delta: float) -> bool:
 	if support == 0.0 and gap > 0.03 - sag:
 		_off_time += delta
 		var popped := _held_time > 0.1 and _off_time > 0.08
-		if popped or gap > 0.3:
+		if popped or gap > tuning.grind_catch_above + 0.1:
+			end_reason = "lifted"
 			_release()
 			return false
 	else:
 		_off_time = 0.0
 	if absf(along) < tuning.grind_min_speed * 0.3:
+		end_reason = "stopped"
 		_release() # stalled out
 		return false
 
@@ -129,8 +140,12 @@ func update(scooter: Scooter, tuning: ScooterTuning, delta: float) -> bool:
 	return true
 
 
-## Lines the deck up with the edge (forward or fakie) and keeps it upright,
-## with a capped torque, like AirControl's landing assist.
+## Lines the deck up with the edge (forward or fakie), in yaw and pitch,
+## with a capped torque on the scooter. Roll is held only gently (the
+## ankles), toward the rider's leg line: a stiff, fast roll hold on the
+## light scooter fought the hips into a growing ±36° rocking, and none let
+## the scooter roll out from under the rider. Upright balance on the edge
+## comes from a push on the rider (_balance), like the standing foot assist.
 func _align(scooter: Scooter, tuning: ScooterTuning, normal: Vector3, delta: float) -> void:
 	var forward := -scooter.global_basis.z
 	var along := direction if forward.dot(direction) >= 0.0 else -direction
@@ -140,13 +155,40 @@ func _align(scooter: Scooter, tuning: ScooterTuning, normal: Vector3, delta: flo
 	if angle > PI:
 		angle -= TAU
 	var error := q.get_axis() * angle if absf(angle) > 1e-4 else Vector3.ZERO
+	var roll_axis := -scooter.global_basis.z
+	error -= roll_axis * error.dot(roll_axis)
 	var inertia := scooter.get_inverse_inertia_tensor().inverse()
 	var wanted := error / tuning.grind_align_time
-	var torque := inertia * (wanted - scooter.angular_velocity) / 0.03
+	var omega := scooter.angular_velocity
+	omega -= roll_axis * omega.dot(roll_axis)
+	var torque := inertia * (wanted - omega) / 0.03
+	torque -= roll_axis * torque.dot(roll_axis)
+	var leg_axis := scooter.rider.leg_axis(scooter)
+	var up := scooter.global_basis.y
+	var roll := asin(clampf(up.cross(leg_axis).dot(roll_axis), -1.0, 1.0))
+	torque += roll_axis * (tuning.grind_roll_stiffness * roll
+			- tuning.grind_roll_damping * scooter.angular_velocity.dot(roll_axis))
 	torque = torque.limit_length(tuning.grind_max_torque)
 	scooter.add_tracked_torque(torque)
 	scooter.assist_work += torque.dot(scooter.angular_velocity) * delta
 	_last.append({"torque": torque, "v": scooter.angular_velocity, "assist": true})
+	_balance(scooter, tuning, delta)
+
+
+## Keeps the whole rider + scooter upright over the edge: a sideways push
+## on the rider toward no lean, like the foot on the ground holding you up.
+func _balance(scooter: Scooter, tuning: ScooterTuning, delta: float) -> void:
+	var rider := scooter.rider
+	var heading := Scooter._flat(-scooter.global_basis.z)
+	if heading == Vector3.ZERO:
+		return
+	var torque := -tuning.assist_stiffness * scooter.lean_angle - tuning.assist_damping * scooter.lean_rate
+	torque = clampf(torque, -tuning.foot_max_torque, tuning.foot_max_torque)
+	var height := maxf(rider.global_position.y - point.y, 0.3)
+	var force := heading.cross(Vector3.UP) * torque / height
+	rider.apply_central_force(force)
+	scooter.assist_work += force.dot(rider.linear_velocity) * delta
+	_last.append({"force": force, "rider": true, "v": rider.linear_velocity, "assist": true})
 
 
 func _catch(scooter: Scooter, tuning: ScooterTuning) -> bool:
@@ -160,7 +202,13 @@ func _catch(scooter: Scooter, tuning: ScooterTuning) -> bool:
 		var b: Vector3 = node.global_transform * (node.get_meta("grind_b") as Vector3) + Vector3.UP * top
 		var hit := _closest_on_deck(scooter, a, b)
 		var t: float = hit[2]
-		if t <= 0.02 or t >= 0.98:
+		# Anywhere over the edge, or coming down up to grind_catch_before
+		# short of its start: pulled onto it (else the front wheel lands on
+		# the end of a rail and pitches you over).
+		var reach := tuning.grind_catch_before / (b - a).length()
+		var toward_b := scooter.linear_velocity.dot(b - a) >= 0.0
+		var entering := (toward_b and t > -reach and t < 0.98) or (not toward_b and t < 1.0 + reach and t > 0.02)
+		if not entering:
 			continue
 		var p: Vector3 = hit[0]
 		var q: Vector3 = hit[1]
@@ -174,7 +222,11 @@ func _catch(scooter: Scooter, tuning: ScooterTuning) -> bool:
 		# A deck arriving a little low, still rising or at the top of a pop,
 		# snaps up onto the edge (skate. is generous here too).
 		var lowest := -tuning.grind_snap_up if v.y > -0.3 else -0.02
-		if height < lowest or height > tuning.grind_catch_distance or side.length() > tuning.grind_catch_side:
+		# Coming down, anywhere within grind_catch_above over it catches and
+		# settles onto it (the pop is high: crossing the rail's line you're
+		# often well above it).
+		var highest := tuning.grind_catch_above if v.y < 0.0 else tuning.grind_catch_distance
+		if height < lowest or height > highest or side.length() > tuning.grind_catch_side:
 			continue
 		if side.length() > 0.05 and v.dot(side.normalized()) > 0.3:
 			continue # moving away from it
@@ -210,6 +262,13 @@ func _release() -> void:
 	if _edge and is_instance_valid(_edge) and is_instance_valid(_scooter):
 		_scooter.remove_collision_exception_with(_edge)
 	_edge = null
+
+
+## Popped off the edge: let go at once (and don't catch it again for a
+## moment).
+func pop_off() -> void:
+	end_reason = "popped"
+	_release()
 
 
 ## Ends a grind without a result (a reset).

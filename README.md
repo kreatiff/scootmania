@@ -14,7 +14,7 @@ Built with **Godot 4.7** (GDScript, Jolt physics). See
 | Action | Gamepad | Keyboard fallback |
 |---|---|---|
 | Lean (steers) / weight back-forward (manuals) / in the air: pitch and spin | Left stick | WASD |
-| Crouch / extend (pop, pump) | Right stick down / up | Arrow keys |
+| Pop (flick up) / crouch, extend (pump) | Right stick | Arrow keys |
 | Tricks (in the air) | Right stick flick: sideways = tailwhip, up/down = barspin | Arrow keys (tap) |
 | Rear brake | Right trigger | Shift |
 | Foot plant (tight turns, stop) | Left trigger (hold) | Ctrl |
@@ -63,12 +63,15 @@ Two physics bodies, split the way a real body splits:
   over the deck by the **hips**. On ramps, the legs soak up the transition
   while the scooter follows the ramp.
 
-**Legs: crouch, pop, pump.** Right stick down crouches; up extends.
-- **Pop:** crouch, then flick up. The legs push off and lift the scooter
-  (~30 cm from rolling). No crouch, no pop.
-- **Pump:** on a ramp, push up (extend) as you go up the transition and
-  crouch as you come back down. You gain speed without kicking; the
-  "energy" graph (top right) shows it.
+**Pop (jump): flick the right stick up.** Any quick upward flick pops,
+from the centre, from a crouch, or a sloppy diagonal, and you leave the
+ground at once: about 45 cm up, legs tucking the scooter under you. Just
+rolled off a lip? A pop up to 0.12 s late still counts. A slow push up
+doesn't pop: that just extends your legs.
+
+**Pump:** on a ramp, push up (extend, slowly or only part way) as you go
+up the transition and crouch (right stick down) as you come back down.
+You gain speed without kicking; the "energy" graph (top right) shows it.
 
 **Lean steers, with countersteering.** The left stick sets how far you
 lean. To lean in, the bars flick the other way for a moment, then steer
@@ -118,10 +121,10 @@ that slides you onto the edge and keeps you lined up is an assist, like
 skate.'s: it catches you up to 25 cm to the side.
 
 *Getting on:* ride alongside the rail and steer so you'll cross it at a
-shallow angle (up to ~25°), crouch (right stick down), and pop (flick
-up) about a quarter of a second before you'd reach it. Coming from the
-end instead, pop about two metres before it; too late and you hit its
-end. Grinds chain into tricks: pop
+shallow angle (up to ~25°), and pop anywhere from a tenth to nearly half
+a second before you'd reach it: coming down, you're caught up to 35 cm
+above it and pulled on. Coming at it from the end, pop anywhere from 1 to
+2.5 m before it (at jogging speed); right at the end, you hit it. Grinds chain into tricks: pop
 off and flick for "50-50 1.2 s + TAILWHIP".
 
 **Tricks.** In the air, flick the right stick: sideways for a
@@ -180,16 +183,18 @@ instead of in real time. Exits with 0 on success. It includes:
   coast distance, energy audits (bank, kicker) covering both bodies and the
   rider's muscle work, the rear wheel staying planted on the kicker,
   bicycle-model steering, grip on concrete versus steel, and recovery;
-- legs: pop height (with and without a crouch), popping off the kicker,
+- pop: a flick up leaves the ground at once and clears 0.6 m; from a
+  crouch or as a diagonal it still pops; a slow push doesn't; popping off
+  the kicker flies higher;
   and pumping a mini ramp for 20 s with an energy audit;
 - turning: full stick at every speed from 0.5 to 8 m/s never falls or
   slides; the foot plant turns in less than 60% of the carving radius at
   walking pace, scuffs at the expected rate, and blocks kicking;
 - grinds: locking onto the rail, staying centred and upright, slowing by
   exactly the steel friction, an energy audit, running off the end,
-  popping off mid-rail, popping onto it from the ground end-on (and
-  hitting its end when too late) and from the side at 10-25°, and no
-  lock-on crossways;
+  popping off mid-rail, popping onto it end-on anywhere 1-2.5 m before
+  it (and hitting its end when too late) and from the side at 10-25°
+  with pops 0.1-0.45 s early, and no lock-on crossways;
 - manuals: weight back moves the load onto the rear wheel as statics
   predicts; a small shift keeps both wheels down; full back loops out; a
   player reacting 0.25 s late can balance a manual and a nose manual;

@@ -196,12 +196,28 @@ extends Resource
 @export_range(0.05, 1.0, 0.05) var bail_slowmo_scale := 0.3
 @export_range(0.0, 3.0, 0.1, "suffix:s") var bail_slowmo_time := 0.6
 
+@export_group("Pop")
+## How high a pop lifts you (the whole body).
+@export_range(0.1, 1.0, 0.01, "suffix:m") var pop_height := 0.45
+## A pop: the right stick rising past pop_threshold from at least 0.4
+## below it, within pop_window. Slower is just extending the legs.
+@export_range(0.2, 0.95, 0.01) var pop_threshold := 0.5
+@export_range(0.05, 0.5, 0.01, "suffix:s") var pop_window := 0.2
+## Still pops this long after rolling off the ground (a late pop at a lip).
+@export_range(0.0, 0.3, 0.01, "suffix:s") var pop_grace := 0.12
+## The legs tuck up after a pop, pulling the scooter up under you.
+@export_range(0.0, 0.8, 0.01, "suffix:s") var pop_tuck_time := 0.3
+
 @export_group("Grinds")
 ## Steel under a scooter deck. Real steel is ~0.3; waxed coping and rails
 ## run slicker, and longer grinds are more fun.
 @export_range(0.0, 0.5, 0.01) var grind_friction := 0.12
-## Catches an edge this far below the deck's underside...
+## Catches an edge this far below the deck's underside (while coming
+## down: grind_catch_above)...
 @export_range(0.01, 0.2, 0.005, "suffix:m") var grind_catch_distance := 0.06
+@export_range(0.0, 0.8, 0.01, "suffix:m") var grind_catch_above := 0.35
+## ...or coming down this far short of its start (along it)...
+@export_range(0.0, 1.5, 0.05, "suffix:m") var grind_catch_before := 0.6
 ## ...and up to this far to the side of it (the lock slides you over)...
 @export_range(0.02, 0.5, 0.01, "suffix:m") var grind_catch_side := 0.25
 ## A deck this far below the edge's top, still rising or at the top of
@@ -221,6 +237,10 @@ extends Resource
 ## Turning to line up with the edge: time to close the gap, strongest torque.
 @export_range(0.03, 1.0, 0.01, "suffix:s") var grind_align_time := 0.12
 @export_range(0.0, 1500.0, 10.0, "suffix:N·m") var grind_max_torque := 400.0
+## Ankles holding the deck's roll under the rider's legs on the edge. Soft
+## on purpose: stiffer fights the hips into a wobble.
+@export_range(0.0, 2000.0, 10.0, "suffix:N·m/rad") var grind_roll_stiffness := 300.0
+@export_range(0.0, 200.0, 1.0, "suffix:N·m·s/rad") var grind_roll_damping := 30.0
 
 @export_group("Tricks")
 ## Time for a whole barspin / tailwhip. Longer needs more air.

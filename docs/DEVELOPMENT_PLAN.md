@@ -525,6 +525,28 @@ tricks.
       lock feels like help, not autopilot.
 - Later: stalls on coping, and other grinds (feeble, smith) with balance.
 
+### Pop rework ✅
+Hands-on: "I'm not seeing it come off the ground when I flick the right
+stick." The Phase 4 pop needed crouch-then-extend (a flick from the
+centre did nothing), took ~0.2 s for the legs to push off, and cleared
+~34 cm. The pop is the basis of nearly every trick, so it's now
+skate.-simple:
+- [x] Any quick upward move of the right stick (past 0.5 from at least
+      0.4 below it, within 0.2 s) pops at once: rider and scooter get the
+      same upward kick along the ground's normal (45 cm, as the legs'
+      work). A slow push up still just extends, for pumping.
+- [x] 0.12 s of grace after rolling off a lip; legs tuck for 0.3 s.
+- [x] **Legs carry weight only when supported.** In the air they used to
+      keep pushing with the rider's full weight, shoving the scooter
+      away: a pop off a rail fell straight back onto it.
+- [x] A pop ends a grind at once.
+- [x] Grinds re-tuned for the higher, instant pop: catch up to 35 cm
+      above while coming down and up to 0.6 m short of a rail's start;
+      roll held gently by the ankles, with upright balance from a push on
+      the rider (a stiff roll hold rocked ±36°; none let the scooter roll
+      out from under the rider). Windows: end-on 1-2.5 m before the
+      rail, side-on 0.1-0.45 s before crossing.
+
 ---
 
 ## 6. Out of scope for now (in rough later order)

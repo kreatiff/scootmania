@@ -59,6 +59,7 @@ var air := AirControl.new()
 var foot := FootPlant.new()
 var tricks := Tricks.new()
 var grind := GrindControl.new()
+var pop := PopControl.new()
 var _last_assist_force := Vector3.ZERO
 var _last_assist_velocity := Vector3.ZERO
 ## How long the scooter has been tipped past fallen_angle_deg, s.
@@ -118,6 +119,7 @@ func _physics_process(delta: float) -> void:
 		return # teleported this tick; forces resume next tick
 	var speed := -linear_velocity.dot(global_basis.z)
 
+	pop.update(self, tuning, intent, delta)
 	foot.update(self, tuning, intent, speed)
 	_update_lean(intent, speed, delta)
 	_update_steering(intent, speed, delta)
@@ -321,6 +323,7 @@ func _place(ground: Vector3, up: Vector3, heading: Vector3) -> void:
 	rear_wheel.sliding = false
 	tricks.clear()
 	grind.clear()
+	pop.clear()
 	_update_trick_visuals()
 	DebugDraw.watches.erase("fallen")
 	reset_physics_interpolation()

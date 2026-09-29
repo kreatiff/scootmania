@@ -106,14 +106,17 @@ func _test_crossways(rail: Rail) -> void:
 	s.queue_free()
 
 
-## Rolling at the rail's end at 4.5 m/s: popping 2.2 m before it lands a
-## 50-50 on it; popping at the last moment (1.5 m) hits its end.
+## Rolling at the rail's end at 4.5 m/s: popping anywhere from 1.0 to
+## 2.5 m before it (a third of a second) lands a 50-50 on it; popping at
+## the last moment (0.5 m) hits its end.
 func _test_pop_on(rail: Rail) -> void:
-	var early := await _pop_at_rail(rail, 2.2)
-	var late := await _pop_at_rail(rail, 1.5)
-	runner.note("popping onto the rail: 2.2 m before: %.1f s grind; 1.5 m before: %s" % [
-			early[0], "bail" if late[1] else "%.1f s grind" % late[0]])
-	_check(early[0] > 0.4 and not early[1], "grind: pop onto the rail from the ground and grind it")
+	var misses: Array[String] = []
+	for before in [1.0, 1.5, 2.0, 2.5]:
+		var r := await _pop_at_rail(rail, before)
+		if r[0] < 0.4 or r[1]:
+			misses.append("%.1f m: %.1f s%s" % [before, r[0], " bail" if r[1] else ""])
+	var late := await _pop_at_rail(rail, 0.5)
+	_check(misses.is_empty(), "grind: popping 1.0-2.5 m before the rail's end lands a grind (misses %s)" % [misses])
 	_check(late[0] == 0.0, "grind: popping too late hits the rail's end")
 
 
@@ -121,12 +124,11 @@ func _test_pop_on(rail: Rail) -> void:
 func _pop_at_rail(rail: Rail, pop_before: float) -> Array:
 	var rail_start := rail.position.x - rail.length * 0.5
 	var s := _spawn(Vector3(rail_start - 6.0, 0, rail.position.z), -90.0, Vector3(4.5, 0, 0))
-	s.manual_intent.pose = Vector2(0, -1)
 	var longest := 0.0
 	for i in tps * 2:
 		await _ticks(1)
 		if s.global_position.x > rail_start - pop_before:
-			s.manual_intent.pose = Vector2(0, 1)
+			s.manual_intent.pose = Vector2(0, 1) # a flick up: pops at once
 		if s.grind.active:
 			longest = maxf(longest, s.grind.time)
 	var bailed := s.rider.bailed
@@ -136,22 +138,21 @@ func _pop_at_rail(rail: Rail, pop_before: float) -> Array:
 
 
 ## Crossing the rail's line at 10°, 20° and 25° at 4.5 m/s, popping
-## 0.2 to 0.45 s before reaching it: every pop catches a 50-50 and rides
+## 0.1 to 0.45 s before reaching it: every pop catches a 50-50 and rides
 ## it without bailing. (Players come at rails from the side far more
 ## often than end-on.)
 func _test_side_approach(rail: Rail) -> void:
 	var misses: Array[String] = []
 	var runs := 0
 	for angle in [10.0, 20.0, 25.0]:
-		for pop_before in [0.2, 0.3, 0.4]:
+		for pop_before in [0.1, 0.25, 0.45]:
 			var dir := Vector3(cos(deg_to_rad(angle)), 0, -sin(deg_to_rad(angle)))
 			var s := _spawn(rail.position - dir * 6.0, rad_to_deg(atan2(-dir.x, -dir.z)), dir * 4.5)
-			s.manual_intent.pose = Vector2(0, -1)
 			var arrive := 6.0 / 4.5
 			var longest := 0.0
 			for i in tps * 3:
 				await _ticks(1)
-				if i / float(tps) > arrive - pop_before - 0.2: # the legs take ~0.2 s to leave the ground
+				if i / float(tps) > arrive - pop_before:
 					s.manual_intent.pose = Vector2(0, 1)
 				if s.grind.active:
 					longest = maxf(longest, s.grind.time)

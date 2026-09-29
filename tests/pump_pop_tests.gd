@@ -12,35 +12,49 @@ func run() -> void:
 	await _test_pumping()
 
 
-## Crouch, then flick the stick up: both wheels leave the ground by a
-## realistic bunny-hop height, and it lands upright. Flicking up without
-## crouching first barely lifts it.
+## The pop is forgiving: a quick flick up from the centre leaves the
+## ground at once and clears well over the height of a rail; from a crouch
+## or as a sloppy diagonal it still pops; a slow push up doesn't (that's
+## extending, for pumping).
 func _test_pop() -> void:
-	var crouched := await _pop_height(true)
-	var standing := await _pop_height(false)
-	_check(crouched[0] > 0.15, "pop: crouch + extend clears %.2f m" % crouched[0])
-	_check(crouched[1], "pop: lands upright")
-	_check(standing[0] < crouched[0] * 0.5,
-			"pop: no crouch, no pop (%.2f m vs %.2f m)" % [standing[0], crouched[0]])
+	var flick := await _pop_height([Vector2(0, 1)])
+	var crouched := await _pop_height([Vector2(0, -1), Vector2(0, -1), Vector2(0, 1)])
+	var diagonal := await _pop_height([Vector2(0.6, 0.7)])
+	var slow: Array[Vector2] = []
+	for i in int(0.5 * tps):
+		slow.append(Vector2(0, i / (0.5 * tps)))
+	var pushed := await _pop_height(slow)
+	runner.note("pop: flick %.2f m (off the ground after %.3f s), crouched %.2f m, diagonal %.2f m, slow push %.2f m" % [
+			flick[0], flick[2], crouched[0], diagonal[0], pushed[0]])
+	_check(flick[0] > 0.4 and flick[2] < 0.03, "pop: a flick up leaves the ground at once and clears %.2f m" % flick[0])
+	_check(flick[1] and crouched[1], "pop: lands upright")
+	_check(crouched[0] > 0.3, "pop: a flick up from a crouch pops too (%.2f m)" % crouched[0])
+	_check(diagonal[0] > 0.3, "pop: a sloppy diagonal flick still pops (%.2f m)" % diagonal[0])
+	_check(pushed[0] < 0.05, "pop: a slow push up doesn't pop (%.2f m)" % pushed[0])
 
 
-## Returns [max clearance of the lower wheel, landed upright].
-func _pop_height(crouch_first: bool) -> Array:
+## Rolling at 2 m/s, feeds `stick` one sample per tick (crouch samples
+## are held for a quarter second), then lets go. Returns [max clearance of
+## the lower wheel, landed upright, seconds from the last input to leaving
+## the ground].
+func _pop_height(stick: Array) -> Array:
 	var s := _spawn(Vector3(140, 0, 140), 0.0, Vector3(0, 0, -2.0))
 	await _ticks(tps / 4)
-	if crouch_first:
-		s.manual_intent.pose = Vector2(0, -1)
-		await _ticks(tps / 2)
-	s.manual_intent.pose = Vector2(0, 1)
+	for sample in stick:
+		s.manual_intent.pose = sample
+		await _ticks(tps / 4 if sample.y < -0.5 else 1)
 	var clearance := 0.0
+	var off_after := INF
 	for i in tps:
+		if off_after == INF and not s.is_grounded():
+			off_after = i / float(tps)
 		await _ticks(1)
 		clearance = maxf(clearance, _lowest_wheel_clearance(s))
 	s.manual_intent.pose = Vector2.ZERO
 	await _ticks(tps * 2)
 	var upright := not s.is_fallen() and not s.rider.bailed and s.is_grounded()
 	s.queue_free()
-	return [clearance, upright]
+	return [clearance, upright, off_after]
 
 
 ## Crouch into the kicker and extend just before the lip: flies higher and
@@ -76,8 +90,8 @@ func _kicker_flight(kicker: Kicker, pop: bool) -> Array:
 	var launched := false
 	for i in tps * 3:
 		await _ticks(1)
-		# Extend as the rear wheel nears the lip (the legs take ~0.15 s).
-		if pop and s.global_position.z < lip_z + 0.9:
+		# Flick up as the rear wheel reaches the lip.
+		if pop and s.global_position.z < lip_z + 0.3:
 			s.manual_intent.pose = Vector2(0, 1)
 		if not s.is_grounded() and s.global_position.z < lip_z:
 			if not launched:
@@ -174,7 +188,8 @@ func _ride_mini_ramp(origin: Vector3, pump: bool) -> Array:
 	return result
 
 
-## A simple pumping rhythm: extend through the lower transition while
+## A simple pumping rhythm (kept under the pop threshold, 0.5: a quick
+## push past it pops): extend through the lower transition while
 ## going up (where the ground pushes hardest), then stay still, so the legs
 ## don't reach full stretch and throw the scooter off the wall; crouch on
 ## the way down.
@@ -184,7 +199,7 @@ static func _pump_target(s: Scooter) -> float:
 	if not s.is_grounded():
 		return 0.0
 	if s.rider.linear_velocity.y > 0.05:
-		return 0.7 if slope > 8.0 and slope < 35.0 else 0.0
+		return 0.45 if slope > 8.0 and slope < 35.0 else 0.0
 	return -0.7
 
 
