@@ -134,7 +134,11 @@ func _make_steel_edge(edge: Dictionary) -> StaticBody3D:
 		var box_mesh := BoxMesh.new()
 		box_mesh.size = box.size
 		mesh = box_mesh
-	var body := PropMaterials.make_steel_body("Steel", shape, mesh, Transform3D(basis, Vector3(0, at.y, at.x)))
+	var xform := Transform3D(basis, Vector3(0, at.y, at.x))
+	var body := PropMaterials.make_steel_body("Steel", shape, mesh, xform)
+	var to_body := xform.affine_inverse()
+	PropMaterials.mark_grind_edge(body, to_body * Vector3(-width * 0.5, at.y, at.x),
+			to_body * Vector3(width * 0.5, at.y, at.x), size * 0.5)
 	# Children of a generated node aren't saved either, but mark them anyway.
 	body.set_meta("generated", true)
 	return body

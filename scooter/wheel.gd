@@ -165,6 +165,18 @@ func simulate(body: Scooter, tuning: ScooterTuning, delta: float) -> void:
 	_update_visual(compression, delta)
 
 
+## No ground under this wheel this tick (it hovers while grinding).
+func hover(body: Scooter, delta: float) -> void:
+	_finish_work(body, delta)
+	in_contact = false
+	sliding = false
+	compression = 0.0
+	normal_force = 0.0
+	tangential_force = Vector3.ZERO
+	applied_force = Vector3.ZERO
+	_update_visual(0.0, delta)
+
+
 ## Work was counted with the velocity at the start of the step; the physics
 ## step then moved at the end velocity. Adding half the difference counts
 ## it with the average, which is exact for a force held over the step.

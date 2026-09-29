@@ -52,3 +52,14 @@ static func make_steel_body(body_name: String, shape: Shape3D, mesh: Mesh, xform
 	visual.material_override = steel_visual()
 	body.add_child(visual)
 	return body
+
+
+## Marks a steel body as a grindable edge: a straight centre line from `a`
+## to `b` (in the body's own frame) whose top is `top` above that line.
+## GrindControl finds these through the "grind_edges" group.
+static func mark_grind_edge(body: Node3D, a: Vector3, b: Vector3, top: float) -> void:
+	body.set_meta("grind_a", a)
+	body.set_meta("grind_b", b)
+	body.set_meta("grind_top", top)
+	if not body.is_in_group("grind_edges"):
+		body.add_to_group("grind_edges")

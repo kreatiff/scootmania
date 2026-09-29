@@ -55,6 +55,8 @@ func rebuild() -> void:
 	bar_mesh.height = length
 	bar_mesh.radial_segments = 16
 	_add_part("Bar", bar_shape, bar_mesh, bar_xform)
+	PropMaterials.mark_grind_edge(self, Vector3(-length * 0.5, height - r, 0),
+			Vector3(length * 0.5, height - r, 0), r)
 
 	var post_height := height - diameter
 	var post_shape := BoxShape3D.new()

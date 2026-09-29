@@ -39,7 +39,7 @@ func update(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent, delta:
 	# Finish last tick's torque work with the step's average angular velocity.
 	scooter.air_work += 0.5 * _last_torque.dot(scooter.angular_velocity - _last_omega) * delta
 	_last_torque = Vector3.ZERO
-	if scooter.is_grounded():
+	if scooter.is_grounded() or scooter.grind.active:
 		var landed := Landing.NONE
 		if airborne:
 			landed = _grade(scooter, tuning)

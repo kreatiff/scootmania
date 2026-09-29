@@ -196,6 +196,28 @@ extends Resource
 @export_range(0.05, 1.0, 0.05) var bail_slowmo_scale := 0.3
 @export_range(0.0, 3.0, 0.1, "suffix:s") var bail_slowmo_time := 0.6
 
+@export_group("Grinds")
+## Steel under a scooter deck. Real steel is ~0.3; waxed coping and rails
+## run slicker, and longer grinds are more fun.
+@export_range(0.0, 0.5, 0.01) var grind_friction := 0.12
+## Catches an edge within this distance of the deck's underside...
+@export_range(0.01, 0.2, 0.005, "suffix:m") var grind_catch_distance := 0.06
+## A deck this far below the edge's top, still rising or at the top of
+## its pop, snaps up onto it.
+@export_range(0.0, 0.1, 0.005, "suffix:m") var grind_snap_up := 0.04
+## ...moving along it at least this fast...
+@export_range(0.2, 4.0, 0.1, "suffix:m/s") var grind_min_speed := 1.0
+## ...and lined up with it within this angle (forward or fakie).
+@export_range(5.0, 60.0, 1.0, "suffix:°") var grind_max_angle_deg := 30.0
+## The edge holding the deck up: stiffness of the contact.
+@export_range(5000.0, 80000.0, 500.0, "suffix:N/m") var grind_stiffness := 30000.0
+## The sideways lock (an assist): stiffness, and its strongest pull.
+@export_range(0.0, 50000.0, 500.0, "suffix:N/m") var grind_lock_stiffness := 15000.0
+@export_range(0.0, 3000.0, 50.0, "suffix:N") var grind_lock_max := 1200.0
+## Turning to line up with the edge: time to close the gap, strongest torque.
+@export_range(0.03, 1.0, 0.01, "suffix:s") var grind_align_time := 0.12
+@export_range(0.0, 1500.0, 10.0, "suffix:N·m") var grind_max_torque := 400.0
+
 @export_group("Tricks")
 ## Time for a whole barspin / tailwhip. Longer needs more air.
 @export_range(0.15, 1.0, 0.01, "suffix:s") var barspin_time := 0.35

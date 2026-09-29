@@ -21,6 +21,9 @@ extends RigidBody3D
 ## balance by steering, and when the left trigger plants the foot, the foot
 ## on the ground holds the rider up (FootPlant).
 
+## Height of the deck's underside above the wheels' contact line, m.
+const DECK_BOTTOM := 0.04
+
 ## A landing was graded (AirControl.Landing).
 signal landed(grade: int)
 ## The rider let go: a crash or a bailed landing.
@@ -55,6 +58,7 @@ var air_work := 0.0
 var air := AirControl.new()
 var foot := FootPlant.new()
 var tricks := Tricks.new()
+var grind := GrindControl.new()
 var _last_assist_force := Vector3.ZERO
 var _last_assist_velocity := Vector3.ZERO
 ## How long the scooter has been tipped past fallen_angle_deg, s.
@@ -137,8 +141,12 @@ func _physics_process(delta: float) -> void:
 	_last_assist_force = Vector3.ZERO
 	if grounded:
 		_apply_balance_torque(speed)
-	front_wheel.simulate(self, tuning, delta)
-	rear_wheel.simulate(self, tuning, delta)
+	if grind.update(self, tuning, delta):
+		front_wheel.hover(self, delta)
+		rear_wheel.hover(self, delta)
+	else:
+		front_wheel.simulate(self, tuning, delta)
+		rear_wheel.simulate(self, tuning, delta)
 	if front_wheel.in_contact and rear_wheel.in_contact:
 		rider.follow_ramp(self, _ramp_normal(), _ramp_curvature(), speed, tuning.leg_axis_response, delta)
 	var landing := air.update(self, tuning, intent, delta)
@@ -200,7 +208,7 @@ func is_fallen() -> bool:
 ## Hung up: wheels off the ground and not moving, e.g. resting on the deck
 ## across a ramp. Not tipped far enough to count as fallen, but not riding.
 func is_stuck() -> bool:
-	return not is_grounded() and linear_velocity.length() < 0.3 \
+	return not is_grounded() and not grind.active and linear_velocity.length() < 0.3 \
 			and rider.linear_velocity.length() < 0.3
 
 
@@ -312,6 +320,7 @@ func _place(ground: Vector3, up: Vector3, heading: Vector3) -> void:
 	front_wheel.sliding = false
 	rear_wheel.sliding = false
 	tricks.clear()
+	grind.clear()
 	_update_trick_visuals()
 	DebugDraw.watches.erase("fallen")
 	reset_physics_interpolation()
@@ -555,6 +564,11 @@ func _draw_debug(speed: float) -> void:
 	DebugDraw.watch("tricks", "%s   %s   manual pitch %+.0f° (%.1f s)   last: %s" % [
 			"%s %.0f%%" % [Tricks.trick_name(tricks.active), tricks.progress * 100.0] if tricks.active != Tricks.Trick.NONE else "—",
 			flick, rad_to_deg(rider.manual_pitch), tricks.manual_time, tricks.last_result])
+	if grind.active:
+		DebugDraw.watch("grind", "50-50 %.1f s   support %.0f N" % [grind.time, grind.support])
+		DebugDraw.point(grind.point, Color.MAGENTA, 0.05)
+	else:
+		DebugDraw.watches.erase("grind")
 	DebugDraw.watch("foot", "HELD (scuffing, full lock)" if foot.held else ("down (standing)" if foot.planted else "on the deck"))
 	DebugDraw.watch("rider", "legs %.2f m (%+.0f N)   hips %+.2f / %+.2f m"
 			% [rider.leg_length, rider.leg_force, rider.hip_shift.x, rider.hip_shift.y])
@@ -576,7 +590,7 @@ static func _wheel_text(wheel: ScooterWheel) -> String:
 func _build() -> void:
 	var r := tuning.wheel_radius
 	var half := tuning.wheelbase * 0.5
-	var deck_bottom := 0.04
+	var deck_bottom := DECK_BOTTOM
 	var deck_size := Vector3(0.12, 0.045, tuning.wheelbase + 0.04)
 	var deck_center := Vector3(0, deck_bottom + deck_size.y * 0.5, 0)
 

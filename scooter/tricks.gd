@@ -21,8 +21,9 @@ var progress := 0.0
 ## Current visual angles about the headtube, radians.
 var bars_angle := 0.0
 var deck_angle := 0.0
-## Tricks finished in this air, in order.
-var done: Array[Trick] = []
+## What's been done since last on the ground, in order: tricks, and the
+## grind before them.
+var done: Array[String] = []
 ## The last flick seen (for the debug HUD): Vector2 direction, and age.
 var last_flick := Vector2.ZERO
 var last_flick_age := INF
@@ -38,6 +39,7 @@ var manual_time := 0.0
 var nose_manual := false
 
 var _flick := FlickDetector.new()
+var _was_grinding := false
 var _manual_off := 0.0
 
 
@@ -49,15 +51,19 @@ func update(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent, delta:
 	if flick != Vector2.ZERO:
 		last_flick = flick
 		last_flick_age = 0.0
-	var airborne := not scooter.is_grounded() and not scooter.rider.bailed
+	var grinding := scooter.grind.active
+	var airborne := not scooter.is_grounded() and not scooter.rider.bailed and not grinding
 	_update_manual(scooter, tuning, delta)
+	if _was_grinding and not grinding:
+		done.append("50-50 %.1f s" % scooter.grind.time)
+	_was_grinding = grinding
 
 	if airborne and active == Trick.NONE and flick != Vector2.ZERO:
 		_start(flick)
 	if active != Trick.NONE:
 		progress += delta / _duration(active, tuning)
 		if progress >= 1.0:
-			done.append(active)
+			done.append(trick_name(active))
 			active = Trick.NONE
 			progress = 0.0
 	_update_angles()
@@ -73,10 +79,12 @@ func update(scooter: Scooter, tuning: ScooterTuning, intent: RiderIntent, delta:
 			last_result = "%s — too early" % trick_name(active)
 			last_landed = false
 		else:
-			done.append(active) # close enough: it snaps round
+			done.append(trick_name(active)) # close enough: it snaps round
 	if not cut_short:
-		last_result = " + ".join(done.map(trick_name))
-		last_landed = true
+		last_result = " + ".join(done)
+		last_landed = not scooter.rider.bailed
+		if scooter.rider.bailed:
+			last_result += " — bailed"
 	active = Trick.NONE
 	progress = 0.0
 	done.clear()
@@ -128,6 +136,7 @@ func _update_manual(scooter: Scooter, tuning: ScooterTuning, delta: float) -> vo
 
 ## Cancels everything (on a bail landing or a reset). Keeps last_result.
 func clear() -> void:
+	_was_grinding = false
 	manual_time = 0.0
 	_manual_off = 0.0
 	active = Trick.NONE

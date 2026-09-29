@@ -43,6 +43,7 @@ func _ready() -> void:
 	await TurnTests.new(self).run()
 	await TrickTests.new(self).run()
 	await ManualTests.new(self).run()
+	await GrindTests.new(self).run()
 
 	stage = Stage.RECORDING
 	RiderInput.start_recording()

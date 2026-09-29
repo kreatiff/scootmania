@@ -109,6 +109,16 @@ same on the front wheel (a nose manual, which needs more stick). A little
 help from the arms slows the balance down to something a thumb can do
 (`manual_assist`, 0 = raw physics). The running time shows at the top.
 
+**Grinds.** Pop onto a rail, a ledge's steel edge or coping, lined up
+with it (within 30°, forward or fakie) and moving along it, and the deck
+locks on: a 50-50. It slides along, slowed by the steel (a bit slicker
+than bare steel, as if waxed), until it runs off the end, you slow to a
+stop, or you pop off (crouch and extend, as on the ground). The lock
+that keeps you centred and lined up is an assist, like skate.'s. To pop
+onto the park rail from the ground at jogging speed, pop about two metres
+before it: too late and you hit its end. Grinds chain into tricks: pop
+off and flick for "50-50 1.2 s + TAILWHIP".
+
 **Tricks.** In the air, flick the right stick: sideways for a
 **tailwhip** (the deck whips around the bars), up or down for a
 **barspin** (the bars spin around). A flick is a quick move from the
@@ -170,6 +180,10 @@ instead of in real time. Exits with 0 on success. It includes:
 - turning: full stick at every speed from 0.5 to 8 m/s never falls or
   slides; the foot plant turns in less than 60% of the carving radius at
   walking pace, scuffs at the expected rate, and blocks kicking;
+- grinds: locking onto the rail, staying centred and upright, slowing by
+  exactly the steel friction, an energy audit, running off the end,
+  popping off mid-rail, popping onto it from the ground (and hitting its
+  end when too late), and no lock-on crossways;
 - manuals: weight back moves the load onto the rear wheel as statics
   predicts; a small shift keeps both wheels down; full back loops out; a
   player reacting 0.25 s late can balance a manual and a nose manual;

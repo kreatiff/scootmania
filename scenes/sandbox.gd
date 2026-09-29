@@ -31,7 +31,9 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var tricks := _scooter.tricks
-	if tricks.manual_time >= _scooter.tuning.manual_min_time:
+	if _scooter.grind.active:
+		_trick_hud.show_live("50-50 %.1f s" % _scooter.grind.time)
+	elif tricks.manual_time >= _scooter.tuning.manual_min_time:
 		_trick_hud.show_live("%s %.1f s" % ["NOSE MANUAL" if tricks.nose_manual else "MANUAL", tricks.manual_time])
 
 

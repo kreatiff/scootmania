@@ -479,11 +479,46 @@ tricks.
       learnable in a few minutes, and looping out reads as pulling too
       hard.
 
+### Grinds ✅ (50-50s)
+- [x] Every steel part (rail, ledge angle iron, coping) records its edge
+      line; GrindControl finds them.
+- [x] **Lock on** when the deck comes down onto an edge (or arrives up to
+      4 cm low while rising: a snap-up), moving along it at ≥ 1 m/s,
+      lined up within 30° forward or fakie.
+- [x] **On the edge:** a stiff, critically damped support (preloaded so it
+      doesn't sag) holds the deck on top. The legs push against it like
+      the ground, so a normal pop hops off. An assisted sideways lock and
+      alignment keep you centred and lined up, and steel friction
+      (0.12, "waxed") slows you. The physics engine's own contact with
+      that edge is switched off while grinding, or it brakes twice. The
+      wheels hover (they overlap the rail a little at the ends).
+- [x] **Off:** past the end (when the deck's middle passes it), lifted clear
+      for 0.08 s (a pop), or slowed to a stop. No re-catch for 0.25 s.
+- [x] Called out live and chained into tricks ("50-50 1.2 s + TAILWHIP").
+
+**What we learned:**
+- **The first grind stopped dead:** 538 J vanished. The support sagged
+  2.4 cm under the rider, so the engine's box-on-cylinder contact (with
+  its own friction) joined in. With that contact off and the support
+  preloaded, speed out matches the friction model within 3% and the
+  energy audit balances to 0.1 J.
+- **Ends are judged at the deck's middle.** Using the deck's front end
+  released the grind while half the deck was still on the rail, and it
+  re-caught for a phantom "0.0 s" grind.
+- **Landing on the rail bounced off it.** With the support only half
+  damped, an early pop's landing rebounded past the lift-off test. Now
+  critically damped, with a longer lift-off test: every early pop grinds.
+
+**Exit criteria:**
+- [ ] Hands-on: popping onto the park rail and ledge feels learnable; the
+      lock feels like help, not autopilot.
+- Later: stalls on coping, and other grinds (feeble, smith) with balance.
+
 ---
 
 ## 6. Out of scope for now (in rough later order)
 
-1. Grinds and stalls on coping and rails (special contact handling).
+1. ~~Grinds~~ (50-50s done, see above). Stalls and other grinds next.
 2. ~~Manuals~~ (done, see above).
 3. More tricks: 180s/360s, bri flips, whip variations, combos.
 4. Rider character model, IK for hands and feet, animation blending.
