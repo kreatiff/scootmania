@@ -200,8 +200,10 @@ extends Resource
 ## Steel under a scooter deck. Real steel is ~0.3; waxed coping and rails
 ## run slicker, and longer grinds are more fun.
 @export_range(0.0, 0.5, 0.01) var grind_friction := 0.12
-## Catches an edge within this distance of the deck's underside...
+## Catches an edge this far below the deck's underside...
 @export_range(0.01, 0.2, 0.005, "suffix:m") var grind_catch_distance := 0.06
+## ...and up to this far to the side of it (the lock slides you over)...
+@export_range(0.02, 0.5, 0.01, "suffix:m") var grind_catch_side := 0.25
 ## A deck this far below the edge's top, still rising or at the top of
 ## its pop, snaps up onto it.
 @export_range(0.0, 0.1, 0.005, "suffix:m") var grind_snap_up := 0.04
@@ -211,9 +213,11 @@ extends Resource
 @export_range(5.0, 60.0, 1.0, "suffix:°") var grind_max_angle_deg := 30.0
 ## The edge holding the deck up: stiffness of the contact.
 @export_range(5000.0, 80000.0, 500.0, "suffix:N/m") var grind_stiffness := 30000.0
-## The sideways lock (an assist): stiffness, and its strongest pull.
-@export_range(0.0, 50000.0, 500.0, "suffix:N/m") var grind_lock_stiffness := 15000.0
-@export_range(0.0, 3000.0, 50.0, "suffix:N") var grind_lock_max := 1200.0
+## The sideways lock (an assist), as an acceleration of scooter and rider
+## together: how quickly it closes the gap (critically damped), and its
+## strongest pull.
+@export_range(0.0, 40.0, 0.5, "suffix:1/s") var grind_lock_rate := 12.0
+@export_range(0.0, 60.0, 0.5, "suffix:m/s²") var grind_lock_max_accel := 20.0
 ## Turning to line up with the edge: time to close the gap, strongest torque.
 @export_range(0.03, 1.0, 0.01, "suffix:s") var grind_align_time := 0.12
 @export_range(0.0, 1500.0, 10.0, "suffix:N·m") var grind_max_torque := 400.0

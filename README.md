@@ -114,9 +114,14 @@ with it (within 30°, forward or fakie) and moving along it, and the deck
 locks on: a 50-50. It slides along, slowed by the steel (a bit slicker
 than bare steel, as if waxed), until it runs off the end, you slow to a
 stop, or you pop off (crouch and extend, as on the ground). The lock
-that keeps you centred and lined up is an assist, like skate.'s. To pop
-onto the park rail from the ground at jogging speed, pop about two metres
-before it: too late and you hit its end. Grinds chain into tricks: pop
+that slides you onto the edge and keeps you lined up is an assist, like
+skate.'s: it catches you up to 25 cm to the side.
+
+*Getting on:* ride alongside the rail and steer so you'll cross it at a
+shallow angle (up to ~25°), crouch (right stick down), and pop (flick
+up) about a quarter of a second before you'd reach it. Coming from the
+end instead, pop about two metres before it; too late and you hit its
+end. Grinds chain into tricks: pop
 off and flick for "50-50 1.2 s + TAILWHIP".
 
 **Tricks.** In the air, flick the right stick: sideways for a
@@ -182,8 +187,9 @@ instead of in real time. Exits with 0 on success. It includes:
   walking pace, scuffs at the expected rate, and blocks kicking;
 - grinds: locking onto the rail, staying centred and upright, slowing by
   exactly the steel friction, an energy audit, running off the end,
-  popping off mid-rail, popping onto it from the ground (and hitting its
-  end when too late), and no lock-on crossways;
+  popping off mid-rail, popping onto it from the ground end-on (and
+  hitting its end when too late) and from the side at 10-25°, and no
+  lock-on crossways;
 - manuals: weight back moves the load onto the rear wheel as statics
   predicts; a small shift keeps both wheels down; full back loops out; a
   player reacting 0.25 s late can balance a manual and a nose manual;

@@ -13,6 +13,7 @@ func run() -> void:
 	await _test_pop_off(rail)
 	await _test_crossways(rail)
 	await _test_pop_on(rail)
+	await _test_side_approach(rail)
 	rail.queue_free()
 
 
@@ -132,6 +133,34 @@ func _pop_at_rail(rail: Rail, pop_before: float) -> Array:
 	s.queue_free()
 	await _ticks(1)
 	return [longest, bailed]
+
+
+## Crossing the rail's line at 10°, 20° and 25° at 4.5 m/s, popping
+## 0.2 to 0.45 s before reaching it: every pop catches a 50-50 and rides
+## it without bailing. (Players come at rails from the side far more
+## often than end-on.)
+func _test_side_approach(rail: Rail) -> void:
+	var misses: Array[String] = []
+	var runs := 0
+	for angle in [10.0, 20.0, 25.0]:
+		for pop_before in [0.2, 0.3, 0.4]:
+			var dir := Vector3(cos(deg_to_rad(angle)), 0, -sin(deg_to_rad(angle)))
+			var s := _spawn(rail.position - dir * 6.0, rad_to_deg(atan2(-dir.x, -dir.z)), dir * 4.5)
+			s.manual_intent.pose = Vector2(0, -1)
+			var arrive := 6.0 / 4.5
+			var longest := 0.0
+			for i in tps * 3:
+				await _ticks(1)
+				if i / float(tps) > arrive - pop_before - 0.2: # the legs take ~0.2 s to leave the ground
+					s.manual_intent.pose = Vector2(0, 1)
+				if s.grind.active:
+					longest = maxf(longest, s.grind.time)
+			runs += 1
+			if longest < 0.4 or s.rider.bailed:
+				misses.append("%.0f° pop %.2f s before: %.1f s%s" % [angle, pop_before, longest, " bail" if s.rider.bailed else ""])
+			s.queue_free()
+			await _ticks(1)
+	_check(misses.is_empty(), "grind: side approaches (10-25°) catch and ride the rail (%d/%d; misses %s)" % [runs - misses.size(), runs, misses])
 
 
 ## A scooter just above the rail's start, heading along it (+X) turned by

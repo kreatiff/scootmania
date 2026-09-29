@@ -6,9 +6,11 @@ extends RefCounted
 ##   it, lined up within grind_max_angle (forward or fakie).
 ## - A stiff support holds the deck on top of the edge (the legs push
 ##   against it as against the ground, so a normal pop hops off), a
-##   sideways lock keeps it centred, and the scooter is turned to line up
-##   with the edge and kept upright. The lock is an assist: its work is
-##   counted in scooter.assist_work.
+##   sideways lock slides you onto it and keeps you centred, and the
+##   scooter is turned to line up with the edge and kept upright. The lock
+##   moves scooter and rider together (the same acceleration on both), so
+##   coming in from the side doesn't pull the scooter out from under you.
+##   It's an assist: its work is counted in scooter.assist_work.
 ## - Steel friction (grind_friction × the support force) slows you; its
 ##   work goes in grind_work.
 ## - It ends off the end of the edge, when the deck lifts off it, or when
@@ -31,6 +33,8 @@ var _edge: PhysicsBody3D
 var _a := Vector3.ZERO
 var _b := Vector3.ZERO
 var _off_time := 0.0
+# Seconds the edge has actually held the deck up in this grind.
+var _held_time := 0.0
 var _cooldown := 0.0
 var _scooter: Scooter
 # Last tick's forces and torques, to finish their work (see _finish_work):
@@ -74,10 +78,15 @@ func update(scooter: Scooter, tuning: ScooterTuning, delta: float) -> bool:
 	var damping := 2.0 * sqrt(tuning.grind_stiffness * m)
 	support = maxf(-tuning.grind_stiffness * gap - damping * v.dot(normal), 0.0)
 	# Lifted well clear for a moment (a pop, or dropped past the edge):
-	# let go. A landing's rebound doesn't last that long.
+	# let go. A landing's rebound doesn't last that long. Caught on the way
+	# up (the snap-up), it waits for you to come down onto the edge, unless
+	# you fly well over it.
+	if support > 0.0:
+		_held_time += delta
 	if support == 0.0 and gap > 0.03 - sag:
 		_off_time += delta
-		if _off_time > 0.08:
+		var popped := _held_time > 0.1 and _off_time > 0.08
+		if popped or gap > 0.3:
 			_release()
 			return false
 	else:
@@ -86,20 +95,33 @@ func update(scooter: Scooter, tuning: ScooterTuning, delta: float) -> bool:
 		_release() # stalled out
 		return false
 
-	# Sideways lock and friction.
+	# Sideways lock: a critically damped pull onto the edge's line, as an
+	# acceleration of the whole rider + scooter (damped on their combined
+	# sideways speed).
 	var side_error := (p - q).dot(lateral)
-	var lock := -(tuning.grind_lock_stiffness * side_error
-			+ 2.0 * sqrt(tuning.grind_lock_stiffness * m) * v.dot(lateral))
-	lock = clampf(lock, -tuning.grind_lock_max, tuning.grind_lock_max)
+	var rider := scooter.rider
+	var total := scooter.mass + rider.mass
+	var system_v := (scooter.linear_velocity * scooter.mass + rider.linear_velocity * rider.mass) / total
+	var w := tuning.grind_lock_rate
+	var lock := -(w * w * side_error + 2.0 * w * system_v.dot(lateral))
+	lock = clampf(lock, -tuning.grind_lock_max_accel, tuning.grind_lock_max_accel)
 	var friction := -signf(along) * tuning.grind_friction * support
 	var support_force := normal * support
-	var lock_force := lateral * lock
+	var lock_force := lateral * lock * scooter.mass
+	var rider_lock := lateral * lock * rider.mass
+	rider.apply_central_force(rider_lock)
+	scooter.assist_work += rider_lock.dot(rider.linear_velocity) * delta
+	_last.append({"force": rider_lock, "rider": true, "v": rider.linear_velocity, "assist": true})
 	var friction_force := direction * friction
-	scooter.add_tracked_force(support_force + lock_force + friction_force, p)
-	var at := scooter.global_transform.affine_inverse() * p
-	_last.append({"force": lock_force, "at": at, "v": v, "assist": true})
-	_last.append({"force": support_force + friction_force, "at": at, "v": v, "assist": false})
-	scooter.assist_work += lock_force.dot(v) * delta
+	# The lock pushes through the centre of mass: at the deck's underside,
+	# below it, every sideways correction also rolled the scooter, which
+	# fought the alignment into a rocking wobble.
+	scooter.add_tracked_force(support_force + friction_force, p)
+	scooter.add_tracked_force(lock_force, com)
+	var to_local := scooter.global_transform.affine_inverse()
+	_last.append({"force": lock_force, "at": to_local * com, "v": scooter.linear_velocity, "assist": true})
+	_last.append({"force": support_force + friction_force, "at": to_local * p, "v": v, "assist": false})
+	scooter.assist_work += lock_force.dot(scooter.linear_velocity) * delta
 	grind_work += (support_force + friction_force).dot(v) * delta
 	_align(scooter, tuning, normal, delta)
 	point = q
@@ -146,12 +168,16 @@ func _catch(scooter: Scooter, tuning: ScooterTuning) -> bool:
 		var height := p.y - q.y
 		var side := ((p - q) - dir * (p - q).dot(dir))
 		side.y = 0.0
+		# Wide sideways (skate.-style), but only coming down onto it from
+		# above and not drifting away from it.
 		var v := scooter.linear_velocity
 		# A deck arriving a little low, still rising or at the top of a pop,
 		# snaps up onto the edge (skate. is generous here too).
 		var lowest := -tuning.grind_snap_up if v.y > -0.3 else -0.02
-		if height < lowest or height > tuning.grind_catch_distance or side.length() > tuning.grind_catch_distance:
+		if height < lowest or height > tuning.grind_catch_distance or side.length() > tuning.grind_catch_side:
 			continue
+		if side.length() > 0.05 and v.dot(side.normalized()) > 0.3:
+			continue # moving away from it
 		if absf(v.dot(dir)) < tuning.grind_min_speed or v.y > 1.0:
 			continue
 		var flat := Vector3(forward.x, 0.0, forward.z).normalized()
@@ -171,6 +197,7 @@ func _catch(scooter: Scooter, tuning: ScooterTuning) -> bool:
 		active = true
 		time = 0.0
 		_off_time = 0.0
+		_held_time = 0.0
 		return true
 	return false
 
@@ -213,7 +240,9 @@ func _finish_work(scooter: Scooter, delta: float) -> void:
 	var com := scooter.global_transform * scooter.center_of_mass
 	for entry in _last:
 		var extra := 0.0
-		if entry.has("torque"):
+		if entry.has("rider"):
+			extra = (entry["force"] as Vector3).dot(scooter.rider.linear_velocity - (entry["v"] as Vector3))
+		elif entry.has("torque"):
 			extra = (entry["torque"] as Vector3).dot(scooter.angular_velocity - (entry["v"] as Vector3))
 		else:
 			var point_now: Vector3 = scooter.global_transform * (entry["at"] as Vector3)

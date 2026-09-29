@@ -495,6 +495,10 @@ tricks.
 - [x] **Off:** past the end (when the deck's middle passes it), lifted clear
       for 0.08 s (a pop), or slowed to a stop. No re-catch for 0.25 s.
 - [x] Called out live and chained into tricks ("50-50 1.2 s + TAILWHIP").
+- [x] **Side approaches** (how players actually come at rails): catches
+      up to 25 cm sideways when coming down onto the edge, and the lock
+      accelerates rider and scooter together, through the scooter's
+      centre of mass. Tested at 10-25° with pops 0.2-0.45 s early: 9/9.
 
 **What we learned:**
 - **The first grind stopped dead:** 538 J vanished. The support sagged
@@ -505,6 +509,13 @@ tricks.
 - **Ends are judged at the deck's middle.** Using the deck's front end
   released the grind while half the deck was still on the rail, and it
   re-caught for a phantom "0.0 s" grind.
+- **Side approaches were close to unusable** (2-3 catches in 8, all
+  bailing). Three causes: a 6 cm sideways catch was far too narrow; the
+  lock pulled only the light scooter, so the rider carried on sideways
+  and pulled it over; and the lock pushed at the deck's underside, below
+  the centre of mass, so every correction also rolled the scooter and
+  rocked it ±15°. Also, a grind caught on the way up (the snap-up) let go
+  as "popped off" before ever landing, and the rider sailed past.
 - **Landing on the rail bounced off it.** With the support only half
   damped, an early pop's landing rebounded past the lift-off test. Now
   critically damped, with a longer lift-off test: every early pop grinds.
